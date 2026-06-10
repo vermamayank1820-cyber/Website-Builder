@@ -27,7 +27,13 @@ function parseJsonComment<T>(code: string, regex: RegExp): T | null {
   try {
     return JSON.parse(match[1]) as T
   } catch {
-    return null
+    // Models occasionally emit trailing commas ("..."],}) — retry after
+    // stripping them rather than discarding the whole manifest.
+    try {
+      return JSON.parse(match[1].replace(/,\s*([}\]])/g, '$1')) as T
+    } catch {
+      return null
+    }
   }
 }
 
