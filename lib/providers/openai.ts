@@ -4,10 +4,12 @@ import { ProviderError, type ChatMessage, type CompletionProvider } from './type
 
 export const DEFAULT_MODEL = 'gpt-4.1-mini'
 
-// A full landing page component runs ~4-5k completion tokens. gpt-4.1-mini
-// is fast, but give it generous headroom for larger edits.
+// A full landing page component runs ~4-5k completion tokens, more for
+// richer art-directed pages with custom motion hooks and inline <style>
+// blocks. gpt-4.1-mini is fast, but give it generous headroom so larger
+// pages and edits aren't truncated mid-component.
 const REQUEST_TIMEOUT_MS = 180_000
-const MAX_OUTPUT_TOKENS = 8000
+const MAX_OUTPUT_TOKENS = 24000
 
 /**
  * Talks to OpenAI via the Responses API. One call in, one string out —

@@ -33,7 +33,10 @@ export function useGenerate() {
   const addMessage = useGeneratorStore((state) => state.addMessage)
   const updateMessage = useGeneratorStore((state) => state.updateMessage)
   const setLastGeneratedAt = useGeneratorStore((state) => state.setLastGeneratedAt)
+  const setProjectSummary = useGeneratorStore((state) => state.setProjectSummary)
+  const setVersion = useGeneratorStore((state) => state.setVersion)
   const code = useGeneratorStore((state) => state.code)
+  const version = useGeneratorStore((state) => state.version)
 
   const generate = useCallback(
     async (prompt: string) => {
@@ -65,13 +68,30 @@ export function useGenerate() {
       setCode(result.data.code)
       setStatus('ready')
       setLastGeneratedAt(Date.now())
+      setProjectSummary(result.data.summary ?? null)
+      setVersion(1)
       updateMessage(assistantId, {
         content:
-          "Your landing page is ready — check the preview, or tell me what to change next.",
-        card: { title: 'Created landing page', status: 'done' },
+          "Your landing page is ready — here's a breakdown of what I built. Check the preview, or tell me what to change next.",
+        card: {
+          title: result.data.summary
+            ? `Created ${result.data.summary.projectType.toLowerCase()}`
+            : 'Created landing page',
+          status: 'done',
+        },
+        summary: result.data.summary,
       })
     },
-    [setStatus, setCode, setError, addMessage, updateMessage, setLastGeneratedAt]
+    [
+      setStatus,
+      setCode,
+      setError,
+      addMessage,
+      updateMessage,
+      setLastGeneratedAt,
+      setProjectSummary,
+      setVersion,
+    ]
   )
 
   const edit = useCallback(
@@ -100,15 +120,35 @@ export function useGenerate() {
         return
       }
 
+      const nextVersion = version + 1
       setCode(result.data.code)
       setStatus('ready')
       setLastGeneratedAt(Date.now())
+      setProjectSummary(result.data.summary ?? null)
+      setVersion(nextVersion)
       updateMessage(assistantId, {
-        content: "Done! I've updated the page — check the preview for the changes.",
-        card: { title: 'Updated landing page', status: 'done' },
+        content: "Done! Here's exactly what changed — check the preview to see it live.",
+        card: {
+          title: result.data.changelog?.summary ?? 'Updated landing page',
+          status: 'done',
+        },
+        changelog: result.data.changelog
+          ? { ...result.data.changelog, version: nextVersion }
+          : undefined,
       })
     },
-    [code, setStatus, setCode, setError, addMessage, updateMessage, setLastGeneratedAt]
+    [
+      code,
+      version,
+      setStatus,
+      setCode,
+      setError,
+      addMessage,
+      updateMessage,
+      setLastGeneratedAt,
+      setProjectSummary,
+      setVersion,
+    ]
   )
 
   return { generate, edit }

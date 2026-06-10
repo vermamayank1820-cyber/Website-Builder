@@ -1,3 +1,4 @@
+import { analyzePage, buildChangeLog, stripChangelogComment } from '@/lib/parser/analyze-page'
 import { extractPageCode } from '@/lib/parser/extract-code'
 import {
   GENERATE_SYSTEM_PROMPT,
@@ -6,12 +7,25 @@ import {
   buildEditPrompt,
 } from '@/lib/prompts/system-prompt'
 import { getProvider } from '@/lib/providers'
+import type { ChangeLog, ProjectSummary } from '@/types'
+
+export interface GenerationResult {
+  code: string
+  summary: ProjectSummary
+}
+
+export interface EditResult {
+  code: string
+  summary: ProjectSummary
+  changelog: Omit<ChangeLog, 'version'>
+}
 
 /**
  * Generates a brand new landing page component from a text prompt.
- * One model call, no follow-ups.
+ * One model call, no follow-ups — the project summary is derived from
+ * the code's MANIFEST comment plus static analysis, not a second call.
  */
-export async function generateLandingPage(prompt: string): Promise<string> {
+export async function generateLandingPage(prompt: string): Promise<GenerationResult> {
   const provider = getProvider()
 
   const raw = await provider.complete([
@@ -19,17 +33,21 @@ export async function generateLandingPage(prompt: string): Promise<string> {
     { role: 'user', content: buildGeneratePrompt(prompt) },
   ])
 
-  return extractPageCode(raw)
+  const code = extractPageCode(raw)
+
+  return { code, summary: analyzePage(code) }
 }
 
 /**
  * Applies a refinement instruction to an existing landing page component.
- * One model call, given the current code plus the new instruction.
+ * One model call, given the current code plus the new instruction. The
+ * change log comes from the CHANGELOG comment (with a section-diff
+ * fallback) and is stripped from the stored code so it never accumulates.
  */
 export async function editLandingPage(
   prompt: string,
   currentCode: string
-): Promise<string> {
+): Promise<EditResult> {
   const provider = getProvider()
 
   const raw = await provider.complete([
@@ -37,5 +55,9 @@ export async function editLandingPage(
     { role: 'user', content: buildEditPrompt(prompt, currentCode) },
   ])
 
-  return extractPageCode(raw)
+  const extracted = extractPageCode(raw)
+  const changelog = buildChangeLog(extracted, currentCode)
+  const code = stripChangelogComment(extracted)
+
+  return { code, summary: analyzePage(code), changelog }
 }

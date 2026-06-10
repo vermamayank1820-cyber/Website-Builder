@@ -2,26 +2,44 @@
 
 import { CheckCircle2, Code2, Loader2, MessageSquare, XCircle } from 'lucide-react'
 
-import type { ChatMessage } from '@/types'
+import type { ChatMessage, GenerationStatus, ProjectSummary } from '@/types'
 import { cn } from '@/utils/cn'
 
+import { ChangeLogCard } from './ChangeLogCard'
+import { ProjectOverview } from './ProjectOverview'
 import { RefineBar } from './RefineBar'
+import { SummaryCard } from './SummaryCard'
 
 interface ChatPanelProps {
   messages: ChatMessage[]
   isLoading: boolean
   className?: string
+  projectSummary?: ProjectSummary | null
+  version?: number
+  status?: GenerationStatus
   onRefine: (instruction: string) => void
   onViewCode: () => void
 }
 
-export function ChatPanel({ messages, isLoading, className, onRefine, onViewCode }: ChatPanelProps) {
+export function ChatPanel({
+  messages,
+  isLoading,
+  className,
+  projectSummary,
+  version = 1,
+  status = 'ready',
+  onRefine,
+  onViewCode,
+}: ChatPanelProps) {
   return (
     <div className={cn('flex-col overflow-hidden border-border bg-background lg:flex', className)}>
       <div className="flex items-center gap-2 border-b border-border bg-surface px-3 py-2">
         <MessageSquare className="h-3.5 w-3.5 text-muted" />
         <span className="text-xs font-medium text-muted">Conversation</span>
       </div>
+      {projectSummary ? (
+        <ProjectOverview summary={projectSummary} version={version} status={status} />
+      ) : null}
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-4">
         {messages.map((message) => (
           <ChatBubble key={message.id} message={message} onViewCode={onViewCode} />
@@ -49,6 +67,8 @@ function ChatBubble({ message, onViewCode }: { message: ChatMessage; onViewCode:
     <div className="max-w-[95%] space-y-2">
       <p className="text-sm leading-relaxed text-muted">{message.content}</p>
       {message.card ? <ChatCard card={message.card} onViewCode={onViewCode} /> : null}
+      {message.summary ? <SummaryCard summary={message.summary} /> : null}
+      {message.changelog ? <ChangeLogCard changelog={message.changelog} /> : null}
     </div>
   )
 }

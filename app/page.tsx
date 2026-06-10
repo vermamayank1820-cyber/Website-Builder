@@ -12,6 +12,8 @@ export default function Home() {
   const error = useGeneratorStore((state) => state.error)
   const messages = useGeneratorStore((state) => state.messages)
   const lastGeneratedAt = useGeneratorStore((state) => state.lastGeneratedAt)
+  const projectSummary = useGeneratorStore((state) => state.projectSummary)
+  const version = useGeneratorStore((state) => state.version)
   const setPrompt = useGeneratorStore((state) => state.setPrompt)
   const setCode = useGeneratorStore((state) => state.setCode)
   const reset = useGeneratorStore((state) => state.reset)
@@ -44,6 +46,8 @@ export default function Home() {
       isLoading={isLoading}
       error={error}
       lastGeneratedAt={lastGeneratedAt}
+      projectSummary={projectSummary}
+      version={version}
       onCodeChange={setCode}
       onRefine={(instruction) => void edit(instruction)}
       onReset={reset}

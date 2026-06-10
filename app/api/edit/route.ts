@@ -44,8 +44,11 @@ export async function POST(
   }
 
   try {
-    const code = await editLandingPage(parsed.data.prompt, parsed.data.currentCode)
-    return NextResponse.json({ success: true, data: { code } })
+    const { code, summary, changelog } = await editLandingPage(
+      parsed.data.prompt,
+      parsed.data.currentCode
+    )
+    return NextResponse.json({ success: true, data: { code, summary, changelog } })
   } catch (error: unknown) {
     const { message, status } = toErrorResponse(error)
     return NextResponse.json({ success: false, error: message }, { status })

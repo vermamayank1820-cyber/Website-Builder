@@ -12,7 +12,7 @@ import { BrowserPreview } from '@/features/preview/BrowserPreview'
 import { buildRoutes } from '@/lib/parser/build-routes'
 import { buildVirtualFs } from '@/lib/parser/build-virtual-fs'
 import { parseSections } from '@/lib/parser/parse-sections'
-import type { ChatMessage, GenerationStatus, WorkspaceMode } from '@/types'
+import type { ChatMessage, GenerationStatus, ProjectSummary, WorkspaceMode } from '@/types'
 import { cn } from '@/utils/cn'
 
 import { ChatPanel } from './ChatPanel'
@@ -28,6 +28,8 @@ interface WorkspaceProps {
   isLoading: boolean
   error: string | null
   lastGeneratedAt: number | null
+  projectSummary: ProjectSummary | null
+  version: number
   onCodeChange: (code: string) => void
   onRefine: (instruction: string) => void
   onReset: () => void
@@ -48,6 +50,8 @@ export function Workspace({
   isLoading,
   error,
   lastGeneratedAt,
+  projectSummary,
+  version,
   onCodeChange,
   onRefine,
   onReset,
@@ -139,6 +143,9 @@ export function Workspace({
                   <ChatPanel
                     messages={messages}
                     isLoading={isLoading}
+                    projectSummary={projectSummary}
+                    version={version}
+                    status={status}
                     onRefine={onRefine}
                     onViewCode={() => setMode('code')}
                     className="flex h-full"
@@ -155,6 +162,9 @@ export function Workspace({
               <ChatPanel
                 messages={messages}
                 isLoading={isLoading}
+                projectSummary={projectSummary}
+                version={version}
+                status={status}
                 onRefine={onRefine}
                 onViewCode={() => setMode('code')}
                 className={cn('h-full', mobilePreviewTab === 'chat' ? 'flex' : 'hidden')}

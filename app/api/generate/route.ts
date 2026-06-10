@@ -44,8 +44,8 @@ export async function POST(
   }
 
   try {
-    const code = await generateLandingPage(parsed.data.prompt)
-    return NextResponse.json({ success: true, data: { code } })
+    const { code, summary } = await generateLandingPage(parsed.data.prompt)
+    return NextResponse.json({ success: true, data: { code, summary } })
   } catch (error: unknown) {
     const { message, status } = toErrorResponse(error)
     return NextResponse.json({ success: false, error: message }, { status })

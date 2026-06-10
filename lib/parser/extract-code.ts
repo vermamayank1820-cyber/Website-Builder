@@ -1,4 +1,21 @@
+import { VERIFIED_PHOTO_IDS, fallbackPhotoId } from '@/lib/prompts/photo-library'
+
 const CODE_FENCE_REGEX = /```(?:[a-zA-Z]*)\n?([\s\S]*?)```/
+
+const UNSPLASH_ID_REGEX = /(images\.unsplash\.com\/)(photo-[0-9a-f]+-[0-9a-f]+)/g
+
+/**
+ * Replaces any Unsplash photo ID the model invented (not in the verified
+ * library, so it would 404) with a deterministic verified fallback. The
+ * prompt instructs the model to use only library IDs, but compliance is
+ * not 100% — this guarantees no broken images reach the preview.
+ */
+function sanitizeImageUrls(code: string): string {
+  return code.replace(UNSPLASH_ID_REGEX, (match, host: string, id: string) => {
+    if (VERIFIED_PHOTO_IDS.has(id)) return match
+    return `${host}${fallbackPhotoId(id)}`
+  })
+}
 
 /**
  * Cleans up raw model output into a bare `function Page() { ... }` body.
@@ -34,5 +51,5 @@ export function extractPageCode(raw: string): string {
     throw new Error('Generated code did not contain a Page component')
   }
 
-  return code
+  return sanitizeImageUrls(code)
 }

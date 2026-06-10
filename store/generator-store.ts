@@ -10,6 +10,8 @@ const initialState: GeneratorState = {
   streamBuffer: '',
   messages: [],
   lastGeneratedAt: null,
+  projectSummary: null,
+  version: 0,
 }
 
 export const useGeneratorStore = create<GeneratorState & GeneratorActions>(
@@ -31,6 +33,8 @@ export const useGeneratorStore = create<GeneratorState & GeneratorActions>(
         ),
       })),
     setLastGeneratedAt: (timestamp) => set({ lastGeneratedAt: timestamp }),
+    setProjectSummary: (summary) => set({ projectSummary: summary }),
+    setVersion: (version) => set({ version }),
     reset: () => set(initialState),
   })
 )

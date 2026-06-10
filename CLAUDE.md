@@ -64,10 +64,21 @@ import/export lines, and leading prose, but the system prompts in
 `lib/prompts/system-prompt.ts` are the primary contract — keep them and the parser in sync if
 the output format changes.
 
-**Images**: the system prompts steer the model toward CSS-based visuals (gradients, blobs,
-inline SVG) by default, and `https://picsum.photos/seed/{seed}/{w}/{h}` as the fallback for
-real photos. Never reintroduce `images.unsplash.com/photo-...`-style URLs in the prompts —
-the model invents non-existent photo IDs and they 404.
+**Images**: the system prompts require imagery to be **business-relevant in subject**
+(depict the brand's domain), not chosen for mood, and ban placeholder/random stock photos.
+The source hierarchy is:
+1. For SaaS/product UI, dashboards, workflows — build HTML/CSS/SVG mockups, never photos.
+2. For real photographic subjects — a **curated, hand-verified library of ~50 real Unsplash
+   photo IDs** embedded in `GENERATE_SYSTEM_PROMPT` (grouped by domain: restaurant, real
+   estate, office, tech, retail, fitness, hotel, cafe). The model must use exactly those IDs
+   via `images.unsplash.com/{id}?w={width}&q=80&auto=format&fit=crop` and may never invent an
+   ID (invented IDs 404 — that was the original failure mode). If no library image fits, the
+   section should be designed with typography/CSS/SVG instead.
+3. loremflickr / picsum / source.unsplash.com are all banned — random subjects read as
+   placeholder stock.
+The edit prompt only allows reusing image URLs already present in the current code.
+Keep this hierarchy in sync with the IMAGES sections in `lib/prompts/system-prompt.ts` —
+if you add library entries, verify each ID resolves (curl → 200) before adding it.
 
 ### State (`store/generator-store.ts`)
 

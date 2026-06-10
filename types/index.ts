@@ -14,11 +14,45 @@ export interface ChatMessageCard {
   status: ChatCardStatus
 }
 
+export interface LaunchCheck {
+  label: string
+  passed: boolean
+}
+
+/**
+ * Structured description of what a generation produced. Built by
+ * lib/parser/analyze-page.ts from the model's MANIFEST comment plus
+ * programmatic code analysis — no extra AI call.
+ */
+export interface ProjectSummary {
+  industry: string
+  projectType: string
+  designStyle: string
+  sections: string[]
+  features: string[]
+  premiumTouches: string[]
+  technical: string[]
+  componentCount: number
+  imageCount: number
+  launchChecks: LaunchCheck[]
+}
+
+/** Structured description of what a refinement changed. */
+export interface ChangeLog {
+  summary: string
+  changes: string[]
+  improvements: string[]
+  sectionsAffected: string[]
+  version: number
+}
+
 export interface ChatMessage {
   id: string
   role: ChatRole
   content: string
   card?: ChatMessageCard
+  summary?: ProjectSummary
+  changelog?: ChangeLog
 }
 
 export interface GeneratorState {
@@ -29,6 +63,8 @@ export interface GeneratorState {
   streamBuffer: string
   messages: ChatMessage[]
   lastGeneratedAt: number | null
+  projectSummary: ProjectSummary | null
+  version: number
 }
 
 export interface GeneratorActions {
@@ -41,6 +77,8 @@ export interface GeneratorActions {
   addMessage: (message: ChatMessage) => void
   updateMessage: (id: string, update: Partial<Omit<ChatMessage, 'id'>>) => void
   setLastGeneratedAt: (timestamp: number | null) => void
+  setProjectSummary: (summary: ProjectSummary | null) => void
+  setVersion: (version: number) => void
   reset: () => void
 }
 
@@ -82,4 +120,6 @@ export interface ApiResponse<T> {
 
 export interface GenerateResponseData {
   code: string
+  summary?: ProjectSummary
+  changelog?: Omit<ChangeLog, 'version'>
 }
