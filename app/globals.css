@@ -1,0 +1,84 @@
+@import "tailwindcss";
+
+:root {
+  --background: #0c0c0e;
+  --surface: #141416;
+  --surface-raised: #1c1c1f;
+  --surface-overlay: #232327;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --foreground: #f7f7f8;
+  --muted: #9a9aa3;
+  --muted-foreground: #6f6f78;
+  --accent: #8b5cf6;
+  --accent-secondary: #ec4899;
+  --accent-foreground: #ffffff;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-overlay: var(--surface-overlay);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-secondary: var(--accent-secondary);
+  --color-accent-foreground: var(--accent-foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+.bg-grid {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 56px 56px;
+}
+
+.bg-glow {
+  background: radial-gradient(
+    640px circle at 50% 0%,
+    color-mix(in oklab, var(--accent) 20%, transparent),
+    transparent 70%
+  );
+}
+
+.bg-accent-gradient {
+  background-image: linear-gradient(135deg, var(--accent) 0%, var(--accent-secondary) 100%);
+}
+
+.text-accent-gradient {
+  background-image: linear-gradient(135deg, var(--accent) 0%, var(--accent-secondary) 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--accent) 40%, transparent);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--surface-overlay);
+  border-radius: 999px;
+  border: 2px solid var(--background);
+}
