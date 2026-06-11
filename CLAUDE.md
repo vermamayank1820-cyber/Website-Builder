@@ -6,8 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 PromptSite: prompt → a single production-ready React landing page, generated via one OpenAI
 call (`gpt-4.1-mini` via the Responses API), with a live sandboxed preview and an editable
-code view. The app is intentionally narrow in scope: prompt → landing page, with single-shot
-edits. No auth, database, multi-page sites, or agent loops — don't add them.
+code view. Around that core sits a Supabase-backed product shell: Google/email auth, a
+personal workspace (projects / recently viewed / templates), automatic persistence with
+version history, and screenshot thumbnails. Still out of scope: multi-page sites and agent
+loops — don't add them.
 
 ## Commands
 
@@ -25,7 +27,81 @@ primary correctness check. Before committing, also re-run `npx tsc --noEmit` aft
 Requires `.env.local` with `OPENAI_API_KEY` (copy from `.env.example`). Optional
 `OPENAI_MODEL` (default `gpt-4.1-mini`) and `AI_PROVIDER` (only `openai` supported today).
 
+Also requires `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` for auth and
+persistence. One-time Supabase setup: run `supabase/migrations/0001_init.sql` then
+`0002_business_os.sql` in the SQL editor (tables, RLS, `thumbnails` storage bucket,
+triggers) and enable the Google provider under Authentication → Providers. Without these
+vars the app builds and `/login` renders, but every protected route redirects to `/login`
+and auth actions surface a config error.
+
 ## Architecture
+
+### Auth, routing & persistence (Supabase)
+
+- **Routes**: `/` redirects by session → `/workspace` (dashboard: My Projects / Recently
+  Viewed / Templates tabs via `?tab=`) or `/login` (split-screen auth,
+  `features/auth/`). `/new` hosts the prompt → generate flow, `/project/[id]` the editor,
+  `/settings` account settings. `proxy.ts` (Next 16 middleware) refreshes the Supabase
+  session on every request and guards `/workspace`, `/project`, `/settings`, `/new`.
+- **Clients**: `lib/supabase/client.ts` (browser singleton), `lib/supabase/server.ts`
+  (server components/route handlers — calls `cookies()` first so pages stay dynamic),
+  `lib/supabase/config.ts` (`isSupabaseConfigured`). OAuth lands on `app/auth/callback`.
+- **Data**: schema in `supabase/migrations/0001_init.sql` — `profiles`, `projects`,
+  `project_versions` (one row per generate/edit/restore; manual editor tweaks update the
+  latest version, debounced), `recently_viewed` (capped at 30 by trigger), all
+  owner-scoped via RLS. All client-side data access goes through
+  `lib/projects/service.ts`.
+- **Editor**: `features/projects/ProjectEditor.tsx` wraps the shared `Workspace` UI —
+  hydrates the Zustand store from the saved project (skipped when arriving from `/new`
+  with state in memory), records views, auto-saves, and owns version history
+  (`VersionHistory.tsx`; restore copies an old version forward as a new one).
+- **Thumbnails**: `features/projects/ThumbnailCapture.tsx` renders the page in a hidden
+  sandboxed iframe and screenshots it with html2canvas inside the sandbox
+  (`lib/preview/build-capture-html.ts`), then uploads the JPEG to the public
+  `thumbnails` bucket (`{user_id}/{project_id}.jpg`, cache-busted URL on the project).
+- **Templates**: `lib/templates/catalog.ts` — 10 static starter pages (same bare
+  `function Page()` contract, curated photo IDs only). Shipped in code, not the DB, so
+  the Templates tab is always populated; "Use template" copies the code into a new
+  project.
+
+### Business OS (agents + shared knowledge base)
+
+- **Universal input**: the homepage composer accepts a goal and/or a link
+  (`lib/agents/url.ts` extracts/classifies URLs client-side for the "detected" chip).
+- **Link Intelligence** (`lib/agents/link-intel.ts`, server-only): generic sites are
+  fetched and reduced to text + meta; GitHub uses its public API. Sources that block
+  crawlers (Instagram/LinkedIn/etc.) degrade *honestly* — `extracted: false` plus a note,
+  and analysis proceeds from the URL + goal with `knowledge.assumptions = true`.
+- **Website Intelligence Engine** (websites only; migration `0003_website_intel.sql`):
+  `lib/agents/site-crawler.ts` crawls up to 7 pages (homepage + one each of
+  pricing/products/features/blog/about/contact/docs/legal, classified by URL path) and
+  lifts color/font hints from markup+CSS. `lib/agents/website-intel.ts` then builds a
+  `WebsiteGraph` (pricing, funnel, positioning, design system, nav, SEO…), runs the
+  **Critic Agent** (specific flaws vs. Apple/Stripe/Linear-level work), and — during
+  generation via `app/api/agent/website` — runs a **self-critique loop**: generate →
+  score 6 dimensions (visual/brand/conversion/a11y/mobile/perf) → regenerate with the
+  reviewer's fixes injected, up to 3 iterations, shipping the highest-scoring version
+  (stored as `project_versions.quality_review`). Graph + critique live on
+  `business_profiles.website_graph` / `.site_critique` and render in the Overview tab.
+  The website prompt gets `buildImprovementContext()` — improve, never replicate.
+- **Business Agent** (`lib/agents/business-agent.ts` + `lib/agents/prompts.ts`):
+  staged LLM pipeline — analyst (strict-JSON knowledge base) → planner (ordered
+  `PlanStep[]`, always ends with the website) → specialist agents (research / growth /
+  design briefs as Markdown). All specialists consume the same `BusinessKnowledge`;
+  never add an agent that doesn't read it.
+- **Persistence** (`supabase/migrations/0002_business_os.sql`): `business_profiles`
+  (knowledge + plan, one per project), `agent_runs` (activity log), `project_documents`
+  (latest doc per kind wins). API routes `app/api/agent/analyze` and `app/api/agent/run`
+  do the server work; `lib/projects/business-service.ts` is the client access layer.
+- **Orchestration** (`hooks/use-business-agent.ts`, client): create draft project →
+  analyze → run planned specialists (failures don't kill the run) → generate the website
+  via `/api/generate` with `projectId` (the route injects `buildWebsiteContext(knowledge)`
+  into the prompt) → save v1 → open the editor. Live progress renders via
+  `features/agent/AgentProgress.tsx` under the composer.
+- **Project tabs**: when a project has a business profile, the editor nav gains
+  Overview (`features/business/OverviewPanel.tsx` — knowledge base, plan, activity) and
+  Business (`features/business/DocsPanel.tsx` — research/growth/design docs with
+  on-demand regeneration). Quick/template projects without a profile hide these tabs.
 
 ### Request flow
 
@@ -68,12 +144,16 @@ the output format changes.
 (depict the brand's domain), not chosen for mood, and ban placeholder/random stock photos.
 The source hierarchy is:
 1. For SaaS/product UI, dashboards, workflows — build HTML/CSS/SVG mockups, never photos.
-2. For real photographic subjects — a **curated, hand-verified library of ~50 real Unsplash
+2. For real photographic subjects — a **curated, hand-verified library of ~55 real Unsplash
    photo IDs** embedded in `GENERATE_SYSTEM_PROMPT` (grouped by domain: restaurant, real
-   estate, office, tech, retail, fitness, hotel, cafe). The model must use exactly those IDs
-   via `images.unsplash.com/{id}?w={width}&q=80&auto=format&fit=crop` and may never invent an
-   ID (invented IDs 404 — that was the original failure mode). If no library image fits, the
-   section should be designed with typography/CSS/SVG instead.
+   estate, office, tech, retail, fitness, hotel, cafe/coffee). The model must use exactly those
+   IDs via `images.unsplash.com/{id}?w={width}&q=80&auto=format&fit=crop` and may never invent
+   an ID (invented IDs 404 — that was the original failure mode). If no library image fits, the
+   section should be designed with typography/CSS/SVG instead. The parser's fallback for
+   invented IDs is **industry-aware**: `fallbackPhotoId(id, industryHint)` replaces them only
+   from the library category matching the business (hint threaded from
+   `BusinessKnowledge.industry` through `generateLandingPage` → `extractPageCode`); a random
+   cross-category replacement is what once put salad photos on a coffee site — never revert to it.
 3. loremflickr / picsum / source.unsplash.com are all banned — random subjects read as
    placeholder stock.
 The edit prompt only allows reusing image URLs already present in the current code.

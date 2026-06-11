@@ -1,56 +1,21 @@
-'use client'
+import { redirect } from 'next/navigation'
 
-import { Hero } from '@/features/generator/Hero'
-import { Workspace } from '@/features/generator/Workspace'
-import { useGenerate } from '@/hooks/use-generate'
-import { useGeneratorStore } from '@/store/generator-store'
+import { isSupabaseConfigured } from '@/lib/supabase/config'
+import { getSupabaseServerClient } from '@/lib/supabase/server'
 
-export default function Home() {
-  const prompt = useGeneratorStore((state) => state.prompt)
-  const code = useGeneratorStore((state) => state.code)
-  const status = useGeneratorStore((state) => state.status)
-  const error = useGeneratorStore((state) => state.error)
-  const messages = useGeneratorStore((state) => state.messages)
-  const lastGeneratedAt = useGeneratorStore((state) => state.lastGeneratedAt)
-  const projectSummary = useGeneratorStore((state) => state.projectSummary)
-  const version = useGeneratorStore((state) => state.version)
-  const setPrompt = useGeneratorStore((state) => state.setPrompt)
-  const setCode = useGeneratorStore((state) => state.setCode)
-  const reset = useGeneratorStore((state) => state.reset)
-
-  const { generate, edit } = useGenerate()
-
-  const isLoading = status === 'generating'
-
-  if (!code) {
-    return (
-      <Hero
-        prompt={prompt}
-        isLoading={isLoading}
-        error={error}
-        onPromptChange={setPrompt}
-        onSubmit={(value) => {
-          setPrompt(value)
-          void generate(value)
-        }}
-      />
-    )
+/**
+ * Root entry: signed-in users land in their workspace, everyone else
+ * goes to login. The generator itself lives at /new and /project/[id].
+ */
+export default async function Home() {
+  if (!isSupabaseConfigured()) {
+    redirect('/login')
   }
 
-  return (
-    <Workspace
-      prompt={prompt}
-      code={code}
-      messages={messages}
-      status={status}
-      isLoading={isLoading}
-      error={error}
-      lastGeneratedAt={lastGeneratedAt}
-      projectSummary={projectSummary}
-      version={version}
-      onCodeChange={setCode}
-      onRefine={(instruction) => void edit(instruction)}
-      onReset={reset}
-    />
-  )
+  const supabase = await getSupabaseServerClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  redirect(user ? '/workspace' : '/login')
 }

@@ -61,6 +61,7 @@ ELIMINATE THESE PATTERNS — do not produce any of them:
 - Fake testimonial cards: invented "Sarah J., CEO" quotes with star ratings and avatar faces — they instantly read as template filler. If the story needs proof, use concrete outcomes, numbers, or a single restrained editorial pull-quote without a face photo.
 - Fake "Meet the team" grids of stock-photo faces presented as real staff. Reference the team in copy or a single environmental photo (people at work) instead of fabricated headshot grids.
 - Fake property/product listing grids stuffed with mismatched photos. Present a few pieces editorially — large, art-directed, each with real descriptive copy — not a fake database dump.
+- Permanently-visible floating overlays: a fixed always-open cart panel, chat bubble, promo box, or any fixed element that sits on top of content while the user scrolls. If the page needs a cart or similar utility, it must be a compact control in the sticky nav (e.g. a cart icon with an item count) that opens a dismissible dropdown/drawer on click and stays closed otherwise. Nothing may permanently cover page content.
 - Sections that exist only to fill space or because "websites usually have them" — every section must have a clear purpose
 - Any layout that would look identical if you swapped the brand name
 
@@ -157,6 +158,7 @@ IMAGES — CRITICAL. NO placeholder images, NO random stock photos, NO broken im
 - VERIFIED PHOTO LIBRARY (subject — id):
 ${photoLibraryPromptBlock()}
 - NEVER invent an Unsplash photo ID — only the IDs above exist. Never use source.unsplash.com, loremflickr, or picsum (random subjects = stock-photo feel). If no library image fits the subject, design the section with typography/CSS/SVG instead of forcing an off-topic photo — a type-led section is more premium than a wrong photo.
+- MATCH THE CATEGORY TO THE BUSINESS. Choose images ONLY from the library category that matches the brand's domain (a coffee brand uses "Cafe & coffee" images; a realtor uses "Architecture & real estate"). Never borrow a photo from an unrelated category because it "looks nice" — a salad bowl on a coffee site or a gym photo on a brand-story section instantly destroys credibility. One off-topic photo is worse than no photo: when in doubt, use typography/CSS instead.
 - When a constructed visual fits better than a photo, keep it restrained and intentional: clean tonal color fields, fine grid/rule lines, precise inline-SVG line work or a diagram. Do NOT default to decorative mesh gradients, ambient glows, blurred floating blobs, decorative circles, or empty geometric shapes.
 - Always give every <img> explicit width/height (or a fixed-aspect wrapper) and a meaningful alt attribute.
 

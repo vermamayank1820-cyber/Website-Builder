@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server'
 
+import { buildWebsiteContext } from '@/lib/agents/prompts'
 import { generateLandingPage } from '@/lib/ai/generate'
 import { generateRequestSchema } from '@/lib/ai/schema'
 import { ProviderError } from '@/lib/providers'
-import type { ApiResponse, GenerateResponseData } from '@/types'
+import { getSupabaseServerClient } from '@/lib/supabase/server'
+import type { ApiResponse, BusinessKnowledge, GenerateResponseData } from '@/types'
 
 // Allow the function to run long enough for larger completions
 // (requires a Vercel plan that supports it).
@@ -43,8 +45,34 @@ export async function POST(
     )
   }
 
+  // When the request belongs to a project with a knowledge base, ground
+  // the generation in it (RLS scopes the lookup to the signed-in owner).
+  let businessContext: string | undefined
+  let industryHint: string | undefined
+  if (parsed.data.projectId) {
+    try {
+      const supabase = await getSupabaseServerClient()
+      const { data: profile } = await supabase
+        .from('business_profiles')
+        .select('knowledge')
+        .eq('project_id', parsed.data.projectId)
+        .maybeSingle()
+      if (profile?.knowledge) {
+        const knowledge = profile.knowledge as BusinessKnowledge
+        businessContext = buildWebsiteContext(knowledge)
+        industryHint = knowledge.industry
+      }
+    } catch {
+      // Knowledge base unavailable — generate from the prompt alone.
+    }
+  }
+
   try {
-    const { code, summary } = await generateLandingPage(parsed.data.prompt)
+    const { code, summary } = await generateLandingPage(
+      parsed.data.prompt,
+      businessContext,
+      industryHint ?? parsed.data.prompt
+    )
     return NextResponse.json({ success: true, data: { code, summary } })
   } catch (error: unknown) {
     const { message, status } = toErrorResponse(error)

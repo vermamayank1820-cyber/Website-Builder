@@ -107,9 +107,44 @@ export const PHOTO_LIBRARY: PhotoCategory[] = [
       { label: 'coffee-bar', id: 'photo-1501339847302-ac426a4a7cbb' },
       { label: 'cafe-counter', id: 'photo-1554118811-1e0d58224f24' },
       { label: 'cafe-interior', id: 'photo-1559925393-8be0ec4767c8' },
+      { label: 'roasted-beans-texture', id: 'photo-1447933601403-0c6688de566e' },
+      { label: 'espresso-portafilters-latte-art', id: 'photo-1511920170033-f8396924c348' },
+      { label: 'black-coffee-cup-topdown', id: 'photo-1514432324607-a09d9b4aefdd' },
+      { label: 'coffee-beans-burlap-sack', id: 'photo-1524350876685-274059332603' },
+      { label: 'pourover-brewing', id: 'photo-1442512595331-e89e73853f31' },
+      { label: 'minimal-coffee-glass', id: 'photo-1521302080334-4bebac2763a6' },
     ],
   },
 ]
+
+/** Industry keywords → the library categories whose subjects fit. */
+const INDUSTRY_CATEGORY_RULES: Array<{ pattern: RegExp; categories: string[] }> = [
+  { pattern: /coffee|cafe|café|roast|barista/i, categories: ['Cafe & coffee'] },
+  { pattern: /restaurant|dining|food|culinary|bakery|catering|kitchen/i, categories: ['Restaurant & food'] },
+  { pattern: /real estate|property|architect|interior|housing|construction/i, categories: ['Architecture & real estate'] },
+  { pattern: /fitness|gym|yoga|wellness|spa|sport/i, categories: ['Fitness & wellness'] },
+  { pattern: /hotel|travel|resort|hospitality|tourism/i, categories: ['Hotel & travel'] },
+  { pattern: /retail|fashion|apparel|clothing|e-?commerce|store|shop/i, categories: ['Retail & fashion'] },
+  { pattern: /tech|software|saas|\bai\b|startup|developer|engineering|data/i, categories: ['Tech'] },
+]
+
+const DEFAULT_FALLBACK_CATEGORY = 'Office & teams'
+
+function entriesForIndustry(industryHint: string | undefined): PhotoEntry[] {
+  if (industryHint) {
+    for (const rule of INDUSTRY_CATEGORY_RULES) {
+      if (rule.pattern.test(industryHint)) {
+        const pool = PHOTO_LIBRARY.filter((c) => rule.categories.includes(c.category)).flatMap(
+          (c) => c.entries
+        )
+        if (pool.length > 0) return pool
+      }
+    }
+  }
+  return (
+    PHOTO_LIBRARY.find((c) => c.category === DEFAULT_FALLBACK_CATEGORY)?.entries ?? ALL_ENTRIES
+  )
+}
 
 const ALL_ENTRIES: PhotoEntry[] = PHOTO_LIBRARY.flatMap((c) => c.entries)
 
@@ -131,13 +166,17 @@ export function photoLibraryPromptBlock(): string {
 
 /**
  * Deterministically maps an arbitrary (invented) photo ID to a verified
- * library entry, so the replacement is stable across re-parses.
+ * library entry, so the replacement is stable across re-parses. When an
+ * industry hint is given, the replacement is drawn ONLY from the matching
+ * category — an invented coffee-bean photo on a coffee site must become
+ * a coffee photo, never a salad or a gym (subject relevance > variety).
  */
-export function fallbackPhotoId(inventedId: string): string {
+export function fallbackPhotoId(inventedId: string, industryHint?: string): string {
+  const pool = entriesForIndustry(industryHint)
   let hash = 0
   for (let i = 0; i < inventedId.length; i++) {
     hash = (hash * 31 + inventedId.charCodeAt(i)) | 0
   }
-  const index = Math.abs(hash) % ALL_ENTRIES.length
-  return ALL_ENTRIES[index].id
+  const index = Math.abs(hash) % pool.length
+  return pool[index].id
 }

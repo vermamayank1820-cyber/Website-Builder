@@ -12,6 +12,9 @@ const initialState: GeneratorState = {
   lastGeneratedAt: null,
   projectSummary: null,
   version: 0,
+  projectId: null,
+  projectTitle: '',
+  saveState: 'idle',
 }
 
 export const useGeneratorStore = create<GeneratorState & GeneratorActions>(
@@ -35,6 +38,21 @@ export const useGeneratorStore = create<GeneratorState & GeneratorActions>(
     setLastGeneratedAt: (timestamp) => set({ lastGeneratedAt: timestamp }),
     setProjectSummary: (summary) => set({ projectSummary: summary }),
     setVersion: (version) => set({ version }),
+    setProject: ({ id, title }) => set({ projectId: id, projectTitle: title }),
+    setSaveState: (saveState) => set({ saveState }),
+    hydrateProject: (snapshot) =>
+      set({
+        ...initialState,
+        prompt: snapshot.prompt,
+        code: snapshot.code,
+        status: 'ready',
+        messages: snapshot.messages,
+        projectSummary: snapshot.projectSummary,
+        version: snapshot.version,
+        projectId: snapshot.projectId,
+        projectTitle: snapshot.projectTitle,
+        saveState: 'saved',
+      }),
     reset: () => set(initialState),
   })
 )

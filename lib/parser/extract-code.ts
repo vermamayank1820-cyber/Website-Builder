@@ -6,14 +6,16 @@ const UNSPLASH_ID_REGEX = /(images\.unsplash\.com\/)(photo-[0-9a-f]+-[0-9a-f]+)/
 
 /**
  * Replaces any Unsplash photo ID the model invented (not in the verified
- * library, so it would 404) with a deterministic verified fallback. The
+ * library, so it would 404) with a deterministic verified fallback drawn
+ * from the industry-matching category when a hint is available. The
  * prompt instructs the model to use only library IDs, but compliance is
- * not 100% — this guarantees no broken images reach the preview.
+ * not 100% — this guarantees no broken images reach the preview, and the
+ * hint guarantees the replacement subject still fits the business.
  */
-function sanitizeImageUrls(code: string): string {
+function sanitizeImageUrls(code: string, industryHint?: string): string {
   return code.replace(UNSPLASH_ID_REGEX, (match, host: string, id: string) => {
     if (VERIFIED_PHOTO_IDS.has(id)) return match
-    return `${host}${fallbackPhotoId(id)}`
+    return `${host}${fallbackPhotoId(id, industryHint)}`
   })
 }
 
@@ -25,7 +27,7 @@ function sanitizeImageUrls(code: string): string {
  * declaration, and removes stray import/export statements so the result
  * can be evaluated directly in the preview sandbox.
  */
-export function extractPageCode(raw: string): string {
+export function extractPageCode(raw: string, industryHint?: string): string {
   let code = raw.trim()
 
   const fenceMatch = code.match(CODE_FENCE_REGEX)
@@ -51,5 +53,5 @@ export function extractPageCode(raw: string): string {
     throw new Error('Generated code did not contain a Page component')
   }
 
-  return sanitizeImageUrls(code)
+  return sanitizeImageUrls(code, industryHint)
 }

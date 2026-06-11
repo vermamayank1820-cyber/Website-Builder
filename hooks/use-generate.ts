@@ -39,7 +39,7 @@ export function useGenerate() {
   const version = useGeneratorStore((state) => state.version)
 
   const generate = useCallback(
-    async (prompt: string) => {
+    async (prompt: string): Promise<GenerateResponseData | null> => {
       setStatus('generating')
       setError(null)
 
@@ -62,7 +62,7 @@ export function useGenerate() {
           content: 'Something went wrong while building your page. Please try again.',
           card: { title: 'Build failed', status: 'error' },
         })
-        return
+        return null
       }
 
       setCode(result.data.code)
@@ -81,6 +81,8 @@ export function useGenerate() {
         },
         summary: result.data.summary,
       })
+
+      return result.data
     },
     [
       setStatus,
@@ -95,7 +97,7 @@ export function useGenerate() {
   )
 
   const edit = useCallback(
-    async (prompt: string) => {
+    async (prompt: string): Promise<GenerateResponseData | null> => {
       setStatus('generating')
       setError(null)
 
@@ -117,7 +119,7 @@ export function useGenerate() {
           content: 'Something went wrong while updating your page. Please try again.',
           card: { title: 'Update failed', status: 'error' },
         })
-        return
+        return null
       }
 
       const nextVersion = version + 1
@@ -136,6 +138,8 @@ export function useGenerate() {
           ? { ...result.data.changelog, version: nextVersion }
           : undefined,
       })
+
+      return result.data
     },
     [
       code,

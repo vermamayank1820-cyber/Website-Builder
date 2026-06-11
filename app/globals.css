@@ -53,6 +53,144 @@ body {
   );
 }
 
+/* ── Atmospheric background system ──────────────────────────────
+   Deep black base + layered radial glows (purple / blue / pink) +
+   noise + vignette. Glow layers drift slowly via transform-only
+   animation (see AtmosphereBackground.tsx). */
+
+.bg-noise {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+}
+
+@keyframes glow-drift {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(4%, 6%, 0) scale(1.12);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .animate-glow-slow {
+    animation: glow-drift 26s ease-in-out infinite alternate;
+  }
+  .animate-glow-slower {
+    animation: glow-drift 38s ease-in-out infinite alternate-reverse;
+  }
+}
+
+.glass-panel {
+  background: rgba(10, 10, 13, 0.55);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+/* Frosted card with a top inner highlight — the "expensive glass" look.
+   Layered: glass tint over a dark base so it reads as a distinct floating
+   object on near-black backgrounds, with a faint violet border glow. */
+.glass-card {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02) 55%),
+    rgba(12, 12, 16, 0.55);
+  backdrop-filter: blur(32px);
+  -webkit-backdrop-filter: blur(32px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.07),
+    0 0 60px -16px rgba(124, 92, 246, 0.14),
+    0 32px 80px -28px rgba(0, 0, 0, 0.9),
+    0 12px 32px -16px rgba(0, 0, 0, 0.7);
+}
+
+/* Spring-feel easing for interactive elements. */
+.ease-spring {
+  transition-timing-function: cubic-bezier(0.34, 1.3, 0.5, 1);
+}
+
+/* ── Agent document rendering ───────────────────────────────── */
+.markdown-body {
+  font-size: 0.875rem;
+  line-height: 1.7;
+  color: color-mix(in oklab, var(--foreground) 88%, transparent);
+}
+.markdown-body h1,
+.markdown-body h2 {
+  margin: 1.8em 0 0.6em;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--foreground);
+}
+.markdown-body h2:first-child,
+.markdown-body h1:first-child {
+  margin-top: 0;
+}
+.markdown-body h3 {
+  margin: 1.4em 0 0.4em;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--foreground);
+}
+.markdown-body p {
+  margin: 0.6em 0;
+}
+.markdown-body ul,
+.markdown-body ol {
+  margin: 0.6em 0;
+  padding-left: 1.4em;
+}
+.markdown-body ul {
+  list-style: disc;
+}
+.markdown-body ol {
+  list-style: decimal;
+}
+.markdown-body li {
+  margin: 0.3em 0;
+}
+.markdown-body strong {
+  color: var(--foreground);
+  font-weight: 600;
+}
+.markdown-body a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.markdown-body table {
+  width: 100%;
+  margin: 1em 0;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+.markdown-body th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--foreground);
+  padding: 0.5em 0.75em;
+  border-bottom: 1px solid var(--border-strong);
+}
+.markdown-body td {
+  padding: 0.5em 0.75em;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.markdown-body code {
+  font-family: var(--font-mono), monospace;
+  font-size: 0.8em;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+}
+.markdown-body blockquote {
+  margin: 0.8em 0;
+  padding: 0.2em 1em;
+  border-left: 2px solid var(--accent);
+  color: var(--muted);
+}
+
 .bg-accent-gradient {
   background-image: linear-gradient(135deg, var(--accent) 0%, var(--accent-secondary) 100%);
 }

@@ -25,15 +25,23 @@ export interface EditResult {
  * One model call, no follow-ups — the project summary is derived from
  * the code's MANIFEST comment plus static analysis, not a second call.
  */
-export async function generateLandingPage(prompt: string): Promise<GenerationResult> {
+export async function generateLandingPage(
+  prompt: string,
+  businessContext?: string,
+  industryHint?: string
+): Promise<GenerationResult> {
   const provider = getProvider()
+
+  const userPrompt = businessContext
+    ? `${businessContext}\n\n${buildGeneratePrompt(prompt)}`
+    : buildGeneratePrompt(prompt)
 
   const raw = await provider.complete([
     { role: 'system', content: GENERATE_SYSTEM_PROMPT },
-    { role: 'user', content: buildGeneratePrompt(prompt) },
+    { role: 'user', content: userPrompt },
   ])
 
-  const code = extractPageCode(raw)
+  const code = extractPageCode(raw, industryHint)
 
   return { code, summary: analyzePage(code) }
 }

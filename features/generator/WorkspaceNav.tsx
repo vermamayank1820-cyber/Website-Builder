@@ -1,6 +1,6 @@
 'use client'
 
-import { Code2, Eye, Folder, MoreHorizontal } from 'lucide-react'
+import { Briefcase, Code2, Eye, Folder, LayoutDashboard, MoreHorizontal } from 'lucide-react'
 
 import type { WorkspaceMode } from '@/types'
 import { cn } from '@/utils/cn'
@@ -8,17 +8,28 @@ import { cn } from '@/utils/cn'
 interface WorkspaceNavProps {
   mode: WorkspaceMode
   onChange: (mode: WorkspaceMode) => void
+  /** Shows the business OS tabs (Overview / Business) when true. */
+  hasBusiness?: boolean
   className?: string
 }
 
-const MODES: ReadonlyArray<{ id: WorkspaceMode; label: string; icon: typeof Eye; shortcut: string }> = [
-  { id: 'preview', label: 'Preview', icon: Eye, shortcut: '1' },
-  { id: 'files', label: 'Files', icon: Folder, shortcut: '2' },
-  { id: 'code', label: 'Code', icon: Code2, shortcut: '3' },
-  { id: 'more', label: 'More', icon: MoreHorizontal, shortcut: '4' },
+const ALL_MODES: ReadonlyArray<{
+  id: WorkspaceMode
+  label: string
+  icon: typeof Eye
+  businessOnly?: boolean
+}> = [
+  { id: 'overview', label: 'Overview', icon: LayoutDashboard, businessOnly: true },
+  { id: 'preview', label: 'Preview', icon: Eye },
+  { id: 'files', label: 'Files', icon: Folder },
+  { id: 'code', label: 'Code', icon: Code2 },
+  { id: 'business', label: 'Business', icon: Briefcase, businessOnly: true },
+  { id: 'more', label: 'More', icon: MoreHorizontal },
 ]
 
-export function WorkspaceNav({ mode, onChange, className }: WorkspaceNavProps) {
+export function WorkspaceNav({ mode, onChange, hasBusiness = false, className }: WorkspaceNavProps) {
+  const modes = ALL_MODES.filter((entry) => hasBusiness || !entry.businessOnly)
+
   return (
     <div
       className={cn(
@@ -26,12 +37,12 @@ export function WorkspaceNav({ mode, onChange, className }: WorkspaceNavProps) {
         className
       )}
     >
-      {MODES.map(({ id, label, icon: Icon, shortcut }) => (
+      {modes.map(({ id, label, icon: Icon }, index) => (
         <button
           key={id}
           type="button"
           onClick={() => onChange(id)}
-          title={`${label} (${shortcut})`}
+          title={`${label} (⌘${index + 1})`}
           className={cn(
             'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors',
             mode === id
@@ -40,7 +51,7 @@ export function WorkspaceNav({ mode, onChange, className }: WorkspaceNavProps) {
           )}
         >
           <Icon className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">{label}</span>
+          <span className="hidden md:inline">{label}</span>
         </button>
       ))}
     </div>
