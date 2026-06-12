@@ -289,6 +289,25 @@ export interface SiteCritique {
   accessibility_flaws: string[]
 }
 
+/** One of three explored design directions; the council picks a winner. */
+export interface DesignConcept {
+  name: string
+  atmosphere: string
+  layout_strategy: string
+  typography: string
+  palette: string[]
+  imagery_strategy: string
+  conversion_approach: string
+  score: number
+  rationale: string
+}
+
+export interface ConceptSelection {
+  concepts: DesignConcept[]
+  winnerIndex: number
+  selection_rationale: string
+}
+
 /** Self-critique scores for a generated site (0-10 each). */
 export interface QualityReview {
   scores: {

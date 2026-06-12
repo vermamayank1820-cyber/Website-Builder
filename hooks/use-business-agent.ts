@@ -139,7 +139,7 @@ export function useBusinessAgent() {
         // iterations server-side; the best-scoring version ships).
         updateStage('website', {
           status: 'active',
-          detail: 'Generating, scoring, and iterating (up to 3 passes)…',
+          detail: 'Exploring 3 design concepts, then generating and scoring (up to 3 passes)…',
         })
         const websitePrompt = buildWebsitePrompt(input, knowledge)
         const response = await fetch('/api/agent/website', {
@@ -151,12 +151,13 @@ export function useBusinessAgent() {
           code: string
           summary?: ProjectSummary
           review: QualityReview
+          concept: { name: string; atmosphere: string } | null
         }>
         if (!result.success || !result.data) {
           throw new Error(result.error ?? 'Website generation failed')
         }
 
-        const { review } = result.data
+        const { review, concept } = result.data
         await saveVersion({
           projectId,
           code: result.data.code,
@@ -166,7 +167,7 @@ export function useBusinessAgent() {
         })
         updateStage('website', {
           status: 'done',
-          detail: `Score ${review.overall}/10 after ${review.iteration} iteration${review.iteration === 1 ? '' : 's'}`,
+          detail: `${concept ? `“${concept.name}” — ` : ''}score ${review.overall}/10 after ${review.iteration} iteration${review.iteration === 1 ? '' : 's'}`,
         })
 
         // Hand the result to the editor via the store, then open it.
@@ -183,7 +184,7 @@ export function useBusinessAgent() {
             {
               id: 'agent-assistant',
               role: 'assistant',
-              content: `I analyzed ${knowledge.company_name}, ran ${docSteps.length + 1} agents (research, strategy, design, build), and shipped the highest-scoring version of your site — ${review.overall}/10 from the self-review panel after ${review.iteration} iteration${review.iteration === 1 ? '' : 's'}. The full knowledge base, research, and growth plan live in the Overview and Business tabs.`,
+              content: `I analyzed ${knowledge.company_name}, explored three design concepts${concept ? ` (went with “${concept.name}”)` : ''}, ran ${docSteps.length + 1} agents, and shipped the highest-scoring version of your site — ${review.overall}/10 from the self-review panel after ${review.iteration} iteration${review.iteration === 1 ? '' : 's'}. The full knowledge base, research, and growth plan live in the Overview and Business tabs.`,
               card: { title: `Built ${knowledge.company_name}`, status: 'done' },
               summary: result.data.summary,
             },

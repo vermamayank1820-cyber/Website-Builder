@@ -2,7 +2,14 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 
 import { buildWebsiteContext } from '@/lib/agents/prompts'
-import { buildImprovementContext, reviewGeneratedSite } from '@/lib/agents/website-intel'
+import {
+  buildConceptContext,
+  buildImprovementContext,
+  exploreConcepts,
+  reviewGeneratedSite,
+  reviewRenderedScreenshots,
+} from '@/lib/agents/website-intel'
+import { captureScreenshots } from '@/lib/render/screenshot'
 import { generateLandingPage } from '@/lib/ai/generate'
 import { ProviderError } from '@/lib/providers'
 import { getSupabaseServerClient } from '@/lib/supabase/server'
@@ -31,6 +38,8 @@ export interface WebsiteAgentResponseData {
   code: string
   summary?: ProjectSummary
   review: QualityReview
+  /** Winning design concept from the multi-concept exploration, if any. */
+  concept: { name: string; atmosphere: string } | null
 }
 
 interface Attempt {
@@ -94,7 +103,6 @@ export async function POST(
 
   const contextBlocks = [buildWebsiteContext(knowledge)]
   if (graph) contextBlocks.push(buildImprovementContext(graph, critique))
-  const baseContext = contextBlocks.join('\n\n')
 
   const { data: run } = await supabase
     .from('agent_runs')
@@ -102,13 +110,57 @@ export async function POST(
       project_id: projectId,
       agent: 'website',
       status: 'running',
-      title: 'Generating & self-reviewing the website',
+      title: 'Exploring concepts, generating & self-reviewing the website',
     })
     .select()
     .single()
 
+  // Multi-concept exploration: three radically different directions,
+  // council-scored, winner becomes a binding design directive. A failed
+  // exploration is logged and generation proceeds without it.
+  const selection = await exploreConcepts(`${prompt}\n\n${contextBlocks.join('\n\n')}`)
+  if (selection) contextBlocks.push(buildConceptContext(selection))
+  const winningConcept = selection ? selection.concepts[selection.winnerIndex] : null
+
+  // Evolution memory: recurring weaknesses (do-not-repeat) plus proven
+  // winning directions from past generations.
+  const { data: lessonRows } = await supabase
+    .from('design_lessons')
+    .select('lesson, category')
+    .order('created_at', { ascending: false })
+    .limit(18)
+  const allLessons = (lessonRows ?? []) as Array<{ lesson: string; category: string }>
+  const pastLessons = allLessons
+    .filter((row) => row.category !== 'winning')
+    .map((row) => row.lesson)
+    .slice(0, 12)
+  const pastWins = allLessons
+    .filter((row) => row.category === 'winning')
+    .map((row) => row.lesson)
+    .slice(0, 4)
+
+  if (pastLessons.length > 0) {
+    contextBlocks.push(
+      [
+        'EVOLUTION MEMORY — recurring weaknesses from your past generations. Do not repeat ANY of them:',
+        ...pastLessons.map((lesson) => `- ${lesson}`),
+      ].join('\n')
+    )
+  }
+  if (pastWins.length > 0) {
+    contextBlocks.push(
+      [
+        'PROVEN WINNERS — directions that scored 9+ in past generations (let them inform taste, never copy them literally):',
+        ...pastWins.map((win) => `- ${win}`),
+      ].join('\n')
+    )
+  }
+
+  const baseContext = contextBlocks.join('\n\n')
+
   const startedAt = Date.now()
   let best: Attempt | null = null
+  let firstReview: QualityReview | null = null
 
   try {
     let feedbackBlock = ''
@@ -135,6 +187,38 @@ export async function POST(
         }
       }
 
+      // Vision review: render the page and judge the PIXELS. When the
+      // Vision Creative Director can see the page, its verdict replaces
+      // the code-only scores (code review can't see dead viewports or
+      // text drowning in imagery); the code reviewer's fixes are kept as
+      // secondary feedback. Degrades silently when no browser/vision.
+      try {
+        const shots = await captureScreenshots(code)
+        if (shots) {
+          const visionReview = await reviewRenderedScreenshots(
+            shots.map((shot) => shot.dataUrl),
+            baseContext,
+            iteration
+          )
+          if (visionReview) {
+            console.info(
+              `[agent:website] iteration ${iteration}: vision ${visionReview.overall}/10 (code review said ${review.overall}/10)`
+            )
+            review = {
+              ...visionReview,
+              feedback: [...visionReview.feedback, ...review.feedback].slice(0, 8),
+            }
+          }
+        }
+      } catch (cause: unknown) {
+        console.warn(
+          '[agent:website] vision stage failed — using code review:',
+          cause instanceof Error ? cause.message : 'unknown'
+        )
+      }
+
+      if (iteration === 1) firstReview = review
+
       if (!best || review.overall > best.review.overall) {
         best = { code, summary, review }
       }
@@ -154,12 +238,59 @@ export async function POST(
     if (!best) throw new Error('Website generation produced no result')
     best.review.iterations_total = best.review.iteration
 
+    // Evolution memory write: a weak first pass means the model's habits
+    // failed — record the reviewer's top fixes so future generations are
+    // warned up front. Best-effort, never blocks the response.
+    if (firstReview && firstReview.overall < SHIP_THRESHOLD && firstReview.feedback.length > 0) {
+      const known = new Set(pastLessons.map((lesson) => lesson.trim().toLowerCase()))
+      // Evolution memory is for design taste — keep a11y/perf plumbing
+      // out of it (those are handled by prompt rules, not memory).
+      const PLUMBING = /aria|srcset|alt text|lazy[- ]?load|focus (?:style|ring)|screen reader|semantic html|landmark|wcag|next\.js|performance|loading=/i
+      const newLessons = firstReview.feedback
+        .filter((lesson) => !PLUMBING.test(lesson))
+        .slice(0, 3)
+        .filter((lesson) => !known.has(lesson.trim().toLowerCase()))
+        .map((lesson) => ({
+          user_id: user.id,
+          project_id: projectId,
+          category: 'first-pass-review',
+          lesson,
+        }))
+      if (newLessons.length > 0) {
+        await supabase
+          .from('design_lessons')
+          .insert(newLessons)
+          .then(({ error: lessonError }) => {
+            if (lessonError) {
+              console.warn('[agent:website] failed to record design lessons:', lessonError.message)
+            }
+          })
+      }
+    }
+
+    // Record winning directions so future generations inherit taste.
+    if (best.review.overall >= SHIP_THRESHOLD && winningConcept) {
+      await supabase
+        .from('design_lessons')
+        .insert({
+          user_id: user.id,
+          project_id: projectId,
+          category: 'winning',
+          lesson: `“${winningConcept.name}” for ${knowledge.industry}: ${winningConcept.atmosphere} (shipped at ${best.review.overall}/10)`,
+        })
+        .then(({ error: winError }) => {
+          if (winError) {
+            console.warn('[agent:website] failed to record winning pattern:', winError.message)
+          }
+        })
+    }
+
     if (run) {
       await supabase
         .from('agent_runs')
         .update({
           status: 'done',
-          summary: `Shipped v-best at ${best.review.overall}/10 after ${best.review.iteration} of ${MAX_ITERATIONS} max iterations`,
+          summary: `${winningConcept ? `Concept “${winningConcept.name}” — ` : ''}shipped at ${best.review.overall}/10 after ${best.review.iteration} of ${MAX_ITERATIONS} max iterations`,
           completed_at: new Date().toISOString(),
         })
         .eq('id', run.id)
@@ -167,7 +298,14 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
-      data: { code: best.code, summary: best.summary, review: best.review },
+      data: {
+        code: best.code,
+        summary: best.summary,
+        review: best.review,
+        concept: winningConcept
+          ? { name: winningConcept.name, atmosphere: winningConcept.atmosphere }
+          : null,
+      },
     })
   } catch (error: unknown) {
     const message =

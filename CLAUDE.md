@@ -27,10 +27,15 @@ primary correctness check. Before committing, also re-run `npx tsc --noEmit` aft
 Requires `.env.local` with `OPENAI_API_KEY` (copy from `.env.example`). Optional
 `OPENAI_MODEL` (default `gpt-4.1-mini`) and `AI_PROVIDER` (only `openai` supported today).
 
+**Model routing**: website code generation (`generateLandingPage`/`editLandingPage`) uses
+`getCodegenProvider()` → `OPENAI_CODEGEN_MODEL` (default `gpt-5`); every other agent call
+(analysis, plans, graph, critic, concepts, reviews) uses `getProvider()` → `OPENAI_MODEL`
+(default `gpt-4.1-mini`). Keep new agents on `getProvider()` unless they emit page code.
+
 Also requires `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` for auth and
-persistence. One-time Supabase setup: run `supabase/migrations/0001_init.sql` then
-`0002_business_os.sql` in the SQL editor (tables, RLS, `thumbnails` storage bucket,
-triggers) and enable the Google provider under Authentication → Providers. Without these
+persistence. One-time Supabase setup: run `supabase/migrations/0001`–`0004` in order in the
+SQL editor (tables, RLS, `thumbnails` storage bucket, triggers) and enable the Google
+provider under Authentication → Providers. Without these
 vars the app builds and `/login` renders, but every protected route redirects to `/login`
 and auth actions surface a config error.
 
@@ -84,6 +89,24 @@ and auth actions surface a config error.
   (stored as `project_versions.quality_review`). Graph + critique live on
   `business_profiles.website_graph` / `.site_critique` and render in the Overview tab.
   The website prompt gets `buildImprovementContext()` — improve, never replicate.
+- **Concept exploration + evolution memory** (in `app/api/agent/website`): before
+  generating, `exploreConcepts()` has a studio council produce 4 structurally different
+  design directions and pick a winner (binding directive via `buildConceptContext()`); and
+  the route injects the user's recent `design_lessons` rows ("EVOLUTION MEMORY — do not
+  repeat" failures + "PROVEN WINNERS" with `category='winning'`) into context, then records
+  the reviewer's top *design-level* fixes from any weak first pass (plumbing filtered out)
+  and the winning concept of any ≥9 ship back into that table (migration
+  `0004_design_lessons.sql`, capped at 60/user). Keep new signals flowing into it.
+- **Vision review** (`lib/render/screenshot.ts` + `reviewRenderedScreenshots()`): each
+  iteration renders the page in headless Chrome (`playwright-core`, `channel: 'chrome'` —
+  uses the dev machine's Chrome, no browser download; **prod needs
+  `@sparticuz/chromium`, not yet wired**), captures desktop hero / desktop mid-scroll /
+  mobile hero JPEGs, and the Vision Creative Director (`OPENAI_VISION_MODEL`, default
+  `gpt-4.1`, via `CompletionProvider.completeVision`) scores the *pixels*. When vision
+  succeeds its verdict replaces the code-only review (code reviewer's fixes kept as
+  secondary feedback); any failure degrades silently to code review. Adds ~30-40s per
+  iteration. The code-only reviewer's `overall` is weighted (visual .3 / brand .2 /
+  conversion .2 / a11y .1 / mobile .1 / perf .1) — keep both reviewers' weights in sync.
 - **Business Agent** (`lib/agents/business-agent.ts` + `lib/agents/prompts.ts`):
   staged LLM pipeline — analyst (strict-JSON knowledge base) → planner (ordered
   `PlanStep[]`, always ends with the website) → specialist agents (research / growth /

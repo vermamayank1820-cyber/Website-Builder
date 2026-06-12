@@ -10,6 +10,12 @@ export interface CompletionProvider {
    * Sends a chat-style completion request and returns the raw text response.
    */
   complete(messages: ChatMessage[]): Promise<string>
+
+  /**
+   * Vision completion: system + user text plus images (data URLs).
+   * Optional — providers without vision simply don't implement it.
+   */
+  completeVision?(system: string, userText: string, imageDataUrls: string[]): Promise<string>
 }
 
 /**

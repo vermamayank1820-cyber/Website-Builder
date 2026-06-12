@@ -50,6 +50,41 @@ export class OpenAIProvider implements CompletionProvider {
       throw toProviderError(error)
     }
   }
+
+  async completeVision(
+    system: string,
+    userText: string,
+    imageDataUrls: string[]
+  ): Promise<string> {
+    try {
+      const response = await this.client.responses.create({
+        model: this.model,
+        input: [
+          { role: 'system', content: system },
+          {
+            role: 'user',
+            content: [
+              { type: 'input_text', text: userText },
+              ...imageDataUrls.map((url) => ({
+                type: 'input_image' as const,
+                image_url: url,
+                detail: 'auto' as const,
+              })),
+            ],
+          },
+        ],
+        max_output_tokens: MAX_OUTPUT_TOKENS,
+      })
+
+      const content = response.output_text?.trim()
+      if (!content) {
+        throw new ProviderError('OpenAI vision response did not contain any content', 502)
+      }
+      return content
+    } catch (error: unknown) {
+      throw toProviderError(error)
+    }
+  }
 }
 
 /**

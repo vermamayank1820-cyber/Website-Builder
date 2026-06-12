@@ -6,7 +6,7 @@ import {
   buildGeneratePrompt,
   buildEditPrompt,
 } from '@/lib/prompts/system-prompt'
-import { getProvider } from '@/lib/providers'
+import { getCodegenProvider } from '@/lib/providers'
 import type { ChangeLog, ProjectSummary } from '@/types'
 
 export interface GenerationResult {
@@ -30,7 +30,7 @@ export async function generateLandingPage(
   businessContext?: string,
   industryHint?: string
 ): Promise<GenerationResult> {
-  const provider = getProvider()
+  const provider = getCodegenProvider()
 
   const userPrompt = businessContext
     ? `${businessContext}\n\n${buildGeneratePrompt(prompt)}`
@@ -56,7 +56,7 @@ export async function editLandingPage(
   prompt: string,
   currentCode: string
 ): Promise<EditResult> {
-  const provider = getProvider()
+  const provider = getCodegenProvider()
 
   const raw = await provider.complete([
     { role: 'system', content: EDIT_SYSTEM_PROMPT },
