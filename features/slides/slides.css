@@ -1,0 +1,151 @@
+/* Slide rendering system. Typography is in cqw (1% of slide width) so a single
+   renderer scales identically at thumbnail and fullscreen sizes. Themes are
+   token sets swapped by class. */
+
+.deck-slide {
+  container-type: size;
+  position: relative;
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--slide-bg);
+  color: var(--slide-fg);
+  font-family: var(--slide-body);
+}
+
+/* ── Themes ─────────────────────────────────────────────────── */
+.deck-theme-editorial {
+  --slide-bg: #f5f3ec;
+  --slide-fg: #1a1812;
+  --slide-muted: #6a655b;
+  --slide-accent: #1f3a8a;
+  --slide-display: Georgia, "Times New Roman", serif;
+  --slide-body: var(--font-geist-sans), system-ui, sans-serif;
+}
+.deck-theme-minimal {
+  --slide-bg: #ffffff;
+  --slide-fg: #0d0e12;
+  --slide-muted: #6b7280;
+  --slide-accent: #2563eb;
+  --slide-display: var(--font-geist-sans), system-ui, sans-serif;
+  --slide-body: var(--font-geist-sans), system-ui, sans-serif;
+}
+.deck-theme-midnight {
+  --slide-bg: #0a0b10;
+  --slide-fg: #f3f4f6;
+  --slide-muted: #9aa1ad;
+  --slide-accent: #818cf8;
+  --slide-display: var(--font-geist-sans), system-ui, sans-serif;
+  --slide-body: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+/* ── Layout scaffolding ─────────────────────────────────────── */
+.deck-pad { padding: 7cqw 8cqw; }
+.deck-center { justify-content: center; }
+.deck-fill { flex: 1; min-height: 0; }
+
+/* ── Type atoms (cqw-scaled) ────────────────────────────────── */
+.s-eyebrow {
+  font-family: var(--slide-body);
+  font-size: 1.5cqw;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--slide-accent);
+}
+.s-kicker {
+  font-family: var(--slide-body);
+  font-size: 1.5cqw;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--slide-muted);
+}
+.s-title {
+  font-family: var(--slide-display);
+  font-size: 6.4cqw;
+  line-height: 1.02;
+  letter-spacing: -0.02em;
+  font-weight: 600;
+}
+.s-title-lg {
+  font-family: var(--slide-display);
+  font-size: 8.5cqw;
+  line-height: 0.98;
+  letter-spacing: -0.025em;
+  font-weight: 600;
+}
+.s-subtitle {
+  font-size: 2.6cqw;
+  line-height: 1.4;
+  color: var(--slide-muted);
+}
+.s-body {
+  font-size: 2.5cqw;
+  line-height: 1.5;
+  color: var(--slide-fg);
+}
+.s-bullet {
+  font-size: 2.5cqw;
+  line-height: 1.45;
+}
+.s-rule {
+  height: 0.4cqw;
+  width: 9cqw;
+  background: var(--slide-accent);
+  border-radius: 999px;
+}
+.s-marker {
+  width: 1cqw;
+  height: 1cqw;
+  margin-top: 1.1cqw;
+  flex: none;
+  border-radius: 999px;
+  background: var(--slide-accent);
+}
+.s-stat-value {
+  font-family: var(--slide-display);
+  font-size: 9cqw;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--slide-accent);
+  font-weight: 600;
+}
+.s-stat-label {
+  font-size: 1.9cqw;
+  line-height: 1.35;
+  color: var(--slide-muted);
+}
+.s-quote {
+  font-family: var(--slide-display);
+  font-size: 4.6cqw;
+  line-height: 1.18;
+  letter-spacing: -0.015em;
+}
+.s-col-head {
+  font-size: 2.6cqw;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.s-pagenum {
+  position: absolute;
+  bottom: 4cqw;
+  right: 5cqw;
+  font-size: 1.4cqw;
+  color: var(--slide-muted);
+}
+
+/* ── Export: print one slide per page (browser → PDF) ───────── */
+.deck-print-root { display: none; }
+@media print {
+  .deck-screen { display: none !important; }
+  .deck-print-root { display: block !important; }
+  .deck-print-root .deck-slide {
+    aspect-ratio: auto;
+    width: 100%;
+    height: 100vh;
+    page-break-after: always;
+  }
+  @page { size: landscape; margin: 0; }
+}

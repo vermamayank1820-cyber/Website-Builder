@@ -1,4 +1,4 @@
-import { chromium } from 'playwright-core'
+import { chromium, type Page } from 'playwright-core'
 
 import { buildPreviewHtml } from '@/lib/preview/build-html'
 
@@ -9,9 +9,36 @@ export interface PageScreenshot {
   dataUrl: string
 }
 
-/** Let React + Babel + Tailwind CDN + images settle before capturing. */
+/** Let React + Babel + Tailwind CDN compile and first paint before we
+ *  start waiting on fonts/images (Babel transpiles the page in-browser). */
 const SETTLE_MS = 5_000
+/** Hard ceiling on the fonts+images wait so a stuck asset can't hang a run. */
+const ASSET_WAIT_MS = 6_000
 const JPEG_QUALITY = 70
+
+/**
+ * After React has painted, wait for web fonts to swap in and in-viewport
+ * images to decode, so the captured pixels match what a user sees — not a
+ * fallback-font flash or a half-loaded hero. Bounded and failure-tolerant.
+ */
+async function waitForAssets(page: Page): Promise<void> {
+  try {
+    await page.evaluate(`new Promise((resolve) => {
+      const cap = setTimeout(resolve, ${ASSET_WAIT_MS});
+      const done = () => { clearTimeout(cap); resolve(); };
+      const fonts = document.fonts ? document.fonts.ready : Promise.resolve();
+      fonts.then(() => {
+        const imgs = Array.from(document.images).filter((img) => !img.complete);
+        if (imgs.length === 0) return done();
+        let left = imgs.length;
+        const tick = () => { if (--left <= 0) done(); };
+        imgs.forEach((img) => { img.addEventListener('load', tick); img.addEventListener('error', tick); });
+      });
+    })`)
+  } catch {
+    // Asset wait is best-effort; the fixed settle already covered first paint.
+  }
+}
 
 /**
  * Renders the generated page in headless Chrome (the user's installed
@@ -44,6 +71,7 @@ export async function captureScreenshots(code: string): Promise<PageScreenshot[]
     const desktop = await browser.newPage({ viewport: { width: 1440, height: 900 } })
     await desktop.setContent(html, { waitUntil: 'load', timeout: 20_000 })
     await desktop.waitForTimeout(SETTLE_MS)
+    await waitForAssets(desktop)
 
     const capture = async (page: typeof desktop, label: string) => {
       const buffer = await page.screenshot({ type: 'jpeg', quality: JPEG_QUALITY })
@@ -59,6 +87,7 @@ export async function captureScreenshots(code: string): Promise<PageScreenshot[]
     const mobile = await browser.newPage({ viewport: { width: 390, height: 844 } })
     await mobile.setContent(html, { waitUntil: 'load', timeout: 20_000 })
     await mobile.waitForTimeout(SETTLE_MS)
+    await waitForAssets(mobile)
     await capture(mobile, 'mobile hero (390px, first viewport)')
     await mobile.close()
 

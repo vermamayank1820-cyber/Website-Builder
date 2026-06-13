@@ -30,6 +30,7 @@ import { AtmosphereBackground } from './AtmosphereBackground'
 import { EmptyState } from './EmptyState'
 import { ProjectCard } from './ProjectCard'
 import { PromptComposer } from './PromptComposer'
+import { TopBar } from './TopBar'
 import { SearchPalette } from './SearchPalette'
 import { Sidebar } from './Sidebar'
 import { TemplateCard } from './TemplateCard'
@@ -240,6 +241,11 @@ export function WorkspaceDashboard({
           </div>
         </header>
 
+        {/* Desktop global top bar — model picker (left) + credits (right) */}
+        <div className="absolute inset-x-0 top-0 z-20 hidden lg:block">
+          <TopBar />
+        </div>
+
         {/* Section 1 — creation hero */}
         <section
           aria-labelledby="hero-heading"
@@ -249,10 +255,10 @@ export function WorkspaceDashboard({
             id="hero-heading"
             className="max-w-2xl text-center text-[2.6rem] font-semibold leading-[1.06] tracking-[-0.035em] text-balance text-white sm:text-6xl"
           >
-            What would you like to build today?
+            What would you like to create today?
           </h1>
           <p className="mt-5 max-w-md text-center text-base text-white/50 sm:text-lg">
-            Describe your website and we&apos;ll generate it instantly.
+            Describe an idea, paste a link, or drop a file — PromptSite builds the rest.
           </p>
 
           <div className="mt-10 flex w-full justify-center">

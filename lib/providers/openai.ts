@@ -5,10 +5,12 @@ import { ProviderError, type ChatMessage, type CompletionProvider } from './type
 export const DEFAULT_MODEL = 'gpt-4.1-mini'
 
 // A full landing page component runs ~4-5k completion tokens, more for
-// richer art-directed pages with custom motion hooks and inline <style>
-// blocks. gpt-4.1-mini is fast, but give it generous headroom so larger
-// pages and edits aren't truncated mid-component.
-const REQUEST_TIMEOUT_MS = 180_000
+// richer art-directed pages. Reasoning models (gpt-5) can take several
+// minutes per page — the timeout must cover them, and the SDK must NOT
+// silently retry long calls (observed failure: 180s timeout × default
+// maxRetries 2 = a 9-minute stack of timeouts ending in a 502).
+const REQUEST_TIMEOUT_MS = 600_000
+const MAX_RETRIES = 0
 const MAX_OUTPUT_TOKENS = 24000
 
 /**
@@ -27,11 +29,12 @@ export class OpenAIProvider implements CompletionProvider {
       )
     }
 
-    this.client = new OpenAI({ apiKey, timeout: REQUEST_TIMEOUT_MS })
+    this.client = new OpenAI({ apiKey, timeout: REQUEST_TIMEOUT_MS, maxRetries: MAX_RETRIES })
     this.model = model
   }
 
   async complete(messages: ChatMessage[]): Promise<string> {
+    const startedAt = Date.now()
     try {
       const response = await this.client.responses.create({
         model: this.model,
@@ -40,6 +43,9 @@ export class OpenAIProvider implements CompletionProvider {
       })
 
       const content = response.output_text?.trim()
+      console.info(
+        `[llm] ${this.model} completed in ${Math.round((Date.now() - startedAt) / 1000)}s — tokens in/out: ${response.usage?.input_tokens ?? '?'}/${response.usage?.output_tokens ?? '?'}`
+      )
 
       if (!content) {
         throw new ProviderError('OpenAI response did not contain any content', 502)
@@ -47,6 +53,10 @@ export class OpenAIProvider implements CompletionProvider {
 
       return content
     } catch (error: unknown) {
+      console.error(
+        `[llm] ${this.model} FAILED after ${Math.round((Date.now() - startedAt) / 1000)}s:`,
+        error instanceof Error ? error.message.split('\n')[0] : 'unknown'
+      )
       throw toProviderError(error)
     }
   }

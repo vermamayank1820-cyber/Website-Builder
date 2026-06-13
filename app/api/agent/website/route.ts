@@ -1,5 +1,6 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { z } from 'zod'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { buildWebsiteContext } from '@/lib/agents/prompts'
 import {
@@ -9,9 +10,10 @@ import {
   reviewGeneratedSite,
   reviewRenderedScreenshots,
 } from '@/lib/agents/website-intel'
-import { captureScreenshots } from '@/lib/render/screenshot'
 import { generateLandingPage } from '@/lib/ai/generate'
+import { MAX_INPUT_CHARS, MIN_INPUT_CHARS } from '@/lib/input/constants'
 import { ProviderError } from '@/lib/providers'
+import { captureScreenshots } from '@/lib/render/screenshot'
 import { getSupabaseServerClient } from '@/lib/supabase/server'
 import type {
   ApiResponse,
@@ -22,24 +24,26 @@ import type {
   WebsiteGraph,
 } from '@/types'
 
-export const maxDuration = 300
+// The response itself returns in <1s; the pipeline continues via after().
+// On Vercel, after() work is still bounded by maxDuration — true prod
+// scale needs a worker/queue (Phase C). In `next dev` it runs to completion.
+export const maxDuration = 800
 
 const MAX_ITERATIONS = 3
 const SHIP_THRESHOLD = 9
-/** Stop starting new iterations once this much wall time is spent. */
-const TIME_BUDGET_MS = 220_000
+/** Don't start another generation pass after this much pipeline time. */
+const ITERATION_TIME_BUDGET_MS = 10 * 60_000
+/** Absolute watchdog: the run is marked failed past this point. */
+const PIPELINE_HARD_CAP_MS = 15 * 60_000
 
 const websiteRequestSchema = z.object({
   projectId: z.string().uuid(),
-  prompt: z.string().trim().min(3).max(2000),
+  prompt: z.string().trim().min(MIN_INPUT_CHARS).max(MAX_INPUT_CHARS),
 })
 
-export interface WebsiteAgentResponseData {
-  code: string
-  summary?: ProjectSummary
-  review: QualityReview
-  /** Winning design concept from the multi-concept exploration, if any. */
-  concept: { name: string; atmosphere: string } | null
+export interface WebsiteAgentStartData {
+  /** agent_runs.id — poll this row for status/title/summary updates. */
+  runId: string
 }
 
 interface Attempt {
@@ -49,14 +53,17 @@ interface Attempt {
 }
 
 /**
- * Website Agent with self-critique: generate → score (visual, brand,
- * conversion, accessibility, mobile, performance) → if below the ship
- * threshold, regenerate with the reviewer's concrete fixes injected —
- * up to 3 iterations, shipping the highest-scoring version.
+ * Website Agent as a background job: POST validates, creates the
+ * agent_run (the job record), and returns its id immediately. The
+ * pipeline — concepts → generate → code review → screenshots → vision
+ * review → refine ×≤3 → persist version — runs after the response and
+ * writes ALL results server-side, so a sleeping laptop, closed tab, or
+ * dropped connection can no longer lose a finished website. The client
+ * polls the agent_runs row (RLS-scoped) for live stage titles.
  */
 export async function POST(
   request: Request
-): Promise<NextResponse<ApiResponse<WebsiteAgentResponseData>>> {
+): Promise<NextResponse<ApiResponse<WebsiteAgentStartData>>> {
   let body: unknown
   try {
     body = await request.json()
@@ -97,33 +104,101 @@ export async function POST(
     )
   }
 
-  const knowledge = profile.knowledge as BusinessKnowledge
-  const graph = (profile.website_graph as WebsiteGraph | null) ?? null
-  const critique = (profile.site_critique as SiteCritique | null) ?? null
-
-  const contextBlocks = [buildWebsiteContext(knowledge)]
-  if (graph) contextBlocks.push(buildImprovementContext(graph, critique))
-
-  const { data: run } = await supabase
+  const { data: run, error: runError } = await supabase
     .from('agent_runs')
     .insert({
       project_id: projectId,
       agent: 'website',
       status: 'running',
-      title: 'Exploring concepts, generating & self-reviewing the website',
+      title: 'Queued — starting the design pipeline',
     })
     .select()
     .single()
+  if (runError || !run) {
+    return NextResponse.json(
+      { success: false, error: `Failed to start the build: ${runError?.message ?? 'unknown'}` },
+      { status: 500 }
+    )
+  }
 
-  // Multi-concept exploration: three radically different directions,
-  // council-scored, winner becomes a binding design directive. A failed
-  // exploration is logged and generation proceeds without it.
+  after(async () => {
+    const watchdog = setTimeout(() => {
+      void supabase
+        .from('agent_runs')
+        .update({
+          status: 'error',
+          error: `Pipeline exceeded the ${PIPELINE_HARD_CAP_MS / 60_000}-minute hard cap`,
+          completed_at: new Date().toISOString(),
+        })
+        .eq('id', run.id)
+        .eq('status', 'running')
+    }, PIPELINE_HARD_CAP_MS)
+
+    try {
+      await runWebsitePipeline({
+        supabase,
+        runId: run.id,
+        userId: user.id,
+        projectId,
+        prompt,
+        knowledge: profile.knowledge as BusinessKnowledge,
+        graph: (profile.website_graph as WebsiteGraph | null) ?? null,
+        critique: (profile.site_critique as SiteCritique | null) ?? null,
+      })
+    } catch (error: unknown) {
+      const message =
+        error instanceof ProviderError || error instanceof Error
+          ? error.message
+          : 'Website pipeline failed'
+      console.error(`[pipeline] run ${run.id} FAILED: ${message}`)
+      await supabase
+        .from('agent_runs')
+        .update({ status: 'error', error: message, completed_at: new Date().toISOString() })
+        .eq('id', run.id)
+        .eq('status', 'running')
+    } finally {
+      clearTimeout(watchdog)
+    }
+  })
+
+  return NextResponse.json({ success: true, data: { runId: run.id } })
+}
+
+interface PipelineInput {
+  supabase: SupabaseClient
+  runId: string
+  userId: string
+  projectId: string
+  prompt: string
+  knowledge: BusinessKnowledge
+  graph: WebsiteGraph | null
+  critique: SiteCritique | null
+}
+
+async function runWebsitePipeline(input: PipelineInput): Promise<void> {
+  const { supabase, runId, userId, projectId, prompt, knowledge, graph, critique } = input
+  const pipelineStart = Date.now()
+
+  const elapsed = () => `${Math.round((Date.now() - pipelineStart) / 1000)}s`
+  const step = (name: string) => {
+    console.info(`[pipeline] ${elapsed()} — ${name}`)
+  }
+  const setProgress = async (title: string) => {
+    step(title)
+    await supabase.from('agent_runs').update({ title }).eq('id', runId)
+  }
+
+  const contextBlocks = [buildWebsiteContext(knowledge)]
+  if (graph) contextBlocks.push(buildImprovementContext(graph, critique))
+
+  // STEP: concept exploration
+  await setProgress('Exploring 4 design concepts')
   const selection = await exploreConcepts(`${prompt}\n\n${contextBlocks.join('\n\n')}`)
   if (selection) contextBlocks.push(buildConceptContext(selection))
   const winningConcept = selection ? selection.concepts[selection.winnerIndex] : null
+  step(`concepts done${winningConcept ? ` — winner “${winningConcept.name}”` : ' (skipped)'}`)
 
-  // Evolution memory: recurring weaknesses (do-not-repeat) plus proven
-  // winning directions from past generations.
+  // STEP: evolution memory
   const { data: lessonRows } = await supabase
     .from('design_lessons')
     .select('lesson, category')
@@ -138,7 +213,6 @@ export async function POST(
     .filter((row) => row.category === 'winning')
     .map((row) => row.lesson)
     .slice(0, 4)
-
   if (pastLessons.length > 0) {
     contextBlocks.push(
       [
@@ -158,169 +232,150 @@ export async function POST(
 
   const baseContext = contextBlocks.join('\n\n')
 
-  const startedAt = Date.now()
   let best: Attempt | null = null
   let firstReview: QualityReview | null = null
+  let feedbackBlock = ''
 
-  try {
-    let feedbackBlock = ''
+  for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
+    // STEP: generation
+    await setProgress(
+      `Generating the website${winningConcept ? ` — “${winningConcept.name}”` : ''} (pass ${iteration}/${MAX_ITERATIONS})`
+    )
+    const generationStart = Date.now()
+    const { code, summary } = await generateLandingPage(
+      prompt,
+      feedbackBlock ? `${baseContext}\n\n${feedbackBlock}` : baseContext,
+      knowledge.industry
+    )
+    step(`pass ${iteration} generated in ${Math.round((Date.now() - generationStart) / 1000)}s`)
 
-    for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
-      const { code, summary } = await generateLandingPage(
-        prompt,
-        feedbackBlock ? `${baseContext}\n\n${feedbackBlock}` : baseContext,
-        knowledge.industry
-      )
-
-      let review: QualityReview
-      try {
-        review = await reviewGeneratedSite(code, baseContext, iteration)
-      } catch {
-        // Scoring failed — keep the attempt with a neutral review rather
-        // than discarding a perfectly good generation.
-        review = {
-          scores: { visual: 7, brand: 7, conversion: 7, accessibility: 7, mobile: 7, performance: 7 },
-          overall: 7,
-          feedback: [],
-          iteration,
-          iterations_total: iteration,
-        }
+    // STEP: code review
+    await setProgress(`Design review — pass ${iteration}`)
+    let review: QualityReview
+    try {
+      review = await reviewGeneratedSite(code, baseContext, iteration)
+    } catch {
+      review = {
+        scores: { visual: 7, brand: 7, conversion: 7, accessibility: 7, mobile: 7, performance: 7 },
+        overall: 7,
+        feedback: [],
+        iteration,
+        iterations_total: iteration,
       }
+    }
 
-      // Vision review: render the page and judge the PIXELS. When the
-      // Vision Creative Director can see the page, its verdict replaces
-      // the code-only scores (code review can't see dead viewports or
-      // text drowning in imagery); the code reviewer's fixes are kept as
-      // secondary feedback. Degrades silently when no browser/vision.
-      try {
-        const shots = await captureScreenshots(code)
-        if (shots) {
-          const visionReview = await reviewRenderedScreenshots(
-            shots.map((shot) => shot.dataUrl),
-            baseContext,
-            iteration
-          )
-          if (visionReview) {
-            console.info(
-              `[agent:website] iteration ${iteration}: vision ${visionReview.overall}/10 (code review said ${review.overall}/10)`
-            )
-            review = {
-              ...visionReview,
-              feedback: [...visionReview.feedback, ...review.feedback].slice(0, 8),
-            }
-          }
-        }
-      } catch (cause: unknown) {
-        console.warn(
-          '[agent:website] vision stage failed — using code review:',
-          cause instanceof Error ? cause.message : 'unknown'
+    // STEP: screenshots + vision review (pixels override code judgment;
+    // both stages degrade gracefully and never kill the run)
+    try {
+      await setProgress(`Rendering & vision review — pass ${iteration}`)
+      const shots = await captureScreenshots(code)
+      if (shots) {
+        const visionReview = await reviewRenderedScreenshots(
+          shots.map((shot) => shot.dataUrl),
+          baseContext,
+          iteration
         )
-      }
-
-      if (iteration === 1) firstReview = review
-
-      if (!best || review.overall > best.review.overall) {
-        best = { code, summary, review }
-      }
-
-      const outOfBudget = Date.now() - startedAt > TIME_BUDGET_MS
-      if (review.overall >= SHIP_THRESHOLD || outOfBudget || iteration === MAX_ITERATIONS) {
-        break
-      }
-
-      feedbackBlock = [
-        `PREVIOUS ATTEMPT SCORED ${review.overall}/10 (visual ${review.scores.visual}, brand ${review.scores.brand}, conversion ${review.scores.conversion}, a11y ${review.scores.accessibility}, mobile ${review.scores.mobile}, perf ${review.scores.performance}).`,
-        'REQUIRED FIXES — address every one of these in the new version:',
-        ...review.feedback.map((item) => `- ${item}`),
-      ].join('\n')
-    }
-
-    if (!best) throw new Error('Website generation produced no result')
-    best.review.iterations_total = best.review.iteration
-
-    // Evolution memory write: a weak first pass means the model's habits
-    // failed — record the reviewer's top fixes so future generations are
-    // warned up front. Best-effort, never blocks the response.
-    if (firstReview && firstReview.overall < SHIP_THRESHOLD && firstReview.feedback.length > 0) {
-      const known = new Set(pastLessons.map((lesson) => lesson.trim().toLowerCase()))
-      // Evolution memory is for design taste — keep a11y/perf plumbing
-      // out of it (those are handled by prompt rules, not memory).
-      const PLUMBING = /aria|srcset|alt text|lazy[- ]?load|focus (?:style|ring)|screen reader|semantic html|landmark|wcag|next\.js|performance|loading=/i
-      const newLessons = firstReview.feedback
-        .filter((lesson) => !PLUMBING.test(lesson))
-        .slice(0, 3)
-        .filter((lesson) => !known.has(lesson.trim().toLowerCase()))
-        .map((lesson) => ({
-          user_id: user.id,
-          project_id: projectId,
-          category: 'first-pass-review',
-          lesson,
-        }))
-      if (newLessons.length > 0) {
-        await supabase
-          .from('design_lessons')
-          .insert(newLessons)
-          .then(({ error: lessonError }) => {
-            if (lessonError) {
-              console.warn('[agent:website] failed to record design lessons:', lessonError.message)
-            }
-          })
-      }
-    }
-
-    // Record winning directions so future generations inherit taste.
-    if (best.review.overall >= SHIP_THRESHOLD && winningConcept) {
-      await supabase
-        .from('design_lessons')
-        .insert({
-          user_id: user.id,
-          project_id: projectId,
-          category: 'winning',
-          lesson: `“${winningConcept.name}” for ${knowledge.industry}: ${winningConcept.atmosphere} (shipped at ${best.review.overall}/10)`,
-        })
-        .then(({ error: winError }) => {
-          if (winError) {
-            console.warn('[agent:website] failed to record winning pattern:', winError.message)
+        if (visionReview) {
+          step(
+            `pass ${iteration}: vision ${visionReview.overall}/10 (code review said ${review.overall}/10)`
+          )
+          review = {
+            ...visionReview,
+            feedback: [...visionReview.feedback, ...review.feedback].slice(0, 8),
           }
-        })
+        }
+      } else {
+        step(`pass ${iteration}: screenshots unavailable — code review only`)
+      }
+    } catch (cause: unknown) {
+      console.warn(
+        '[pipeline] vision stage failed — using code review:',
+        cause instanceof Error ? cause.message : 'unknown'
+      )
     }
 
-    if (run) {
-      await supabase
-        .from('agent_runs')
-        .update({
-          status: 'done',
-          summary: `${winningConcept ? `Concept “${winningConcept.name}” — ` : ''}shipped at ${best.review.overall}/10 after ${best.review.iteration} of ${MAX_ITERATIONS} max iterations`,
-          completed_at: new Date().toISOString(),
-        })
-        .eq('id', run.id)
+    if (iteration === 1) firstReview = review
+    if (!best || review.overall > best.review.overall) {
+      best = { code, summary, review }
     }
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        code: best.code,
-        summary: best.summary,
-        review: best.review,
-        concept: winningConcept
-          ? { name: winningConcept.name, atmosphere: winningConcept.atmosphere }
-          : null,
-      },
-    })
-  } catch (error: unknown) {
-    const message =
-      error instanceof ProviderError || error instanceof Error
-        ? error.message
-        : 'Website agent failed'
-    const status = error instanceof ProviderError ? error.status : 502
-
-    if (run) {
-      await supabase
-        .from('agent_runs')
-        .update({ status: 'error', error: message, completed_at: new Date().toISOString() })
-        .eq('id', run.id)
+    const outOfBudget = Date.now() - pipelineStart > ITERATION_TIME_BUDGET_MS
+    if (review.overall >= SHIP_THRESHOLD || outOfBudget || iteration === MAX_ITERATIONS) {
+      if (outOfBudget) step('time budget reached — shipping best version')
+      break
     }
 
-    return NextResponse.json({ success: false, error: message }, { status })
+    feedbackBlock = [
+      `PREVIOUS ATTEMPT SCORED ${review.overall}/10 (visual ${review.scores.visual}, brand ${review.scores.brand}, conversion ${review.scores.conversion}, a11y ${review.scores.accessibility}, mobile ${review.scores.mobile}, perf ${review.scores.performance}).`,
+      'REQUIRED FIXES — address every one of these in the new version:',
+      ...review.feedback.map((item) => `- ${item}`),
+    ].join('\n')
   }
+
+  if (!best) throw new Error('Website generation produced no result')
+  best.review.iterations_total = best.review.iteration
+
+  // STEP: persist the version SERVER-SIDE — the result can never again
+  // be lost to a dead client connection.
+  await setProgress('Saving your website')
+  const { data: latest } = await supabase
+    .from('project_versions')
+    .select('version_number')
+    .eq('project_id', projectId)
+    .order('version_number', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const nextNumber = (latest?.version_number ?? 0) + 1
+
+  const { error: versionError } = await supabase.from('project_versions').insert({
+    project_id: projectId,
+    version_number: nextNumber,
+    generated_code: best.code,
+    generation_summary: `Built ${knowledge.company_name} website — ${winningConcept ? `“${winningConcept.name}”, ` : ''}self-review ${best.review.overall}/10 (${best.review.iteration} pass${best.review.iteration === 1 ? '' : 'es'})`,
+    summary_data: best.summary,
+    quality_review: best.review,
+  })
+  if (versionError) throw new Error(`Failed to save the website: ${versionError.message}`)
+
+  await supabase.from('projects').update({ status: 'ready' }).eq('id', projectId)
+
+  // STEP: evolution memory writes (best-effort)
+  if (firstReview && firstReview.overall < SHIP_THRESHOLD && firstReview.feedback.length > 0) {
+    const known = new Set(pastLessons.map((lesson) => lesson.trim().toLowerCase()))
+    const PLUMBING =
+      /aria|srcset|alt text|lazy[- ]?load|focus (?:style|ring)|screen reader|semantic html|landmark|wcag|next\.js|performance|loading=/i
+    const newLessons = firstReview.feedback
+      .filter((lesson) => !PLUMBING.test(lesson))
+      .slice(0, 3)
+      .filter((lesson) => !known.has(lesson.trim().toLowerCase()))
+      .map((lesson) => ({
+        user_id: userId,
+        project_id: projectId,
+        category: 'first-pass-review',
+        lesson,
+      }))
+    if (newLessons.length > 0) {
+      await supabase.from('design_lessons').insert(newLessons)
+    }
+  }
+  if (best.review.overall >= SHIP_THRESHOLD && winningConcept) {
+    await supabase.from('design_lessons').insert({
+      user_id: userId,
+      project_id: projectId,
+      category: 'winning',
+      lesson: `“${winningConcept.name}” for ${knowledge.industry}: ${winningConcept.atmosphere} (shipped at ${best.review.overall}/10)`,
+    })
+  }
+
+  // STEP: done
+  await supabase
+    .from('agent_runs')
+    .update({
+      status: 'done',
+      title: 'Website built',
+      summary: `${winningConcept ? `Concept “${winningConcept.name}” — ` : ''}shipped v${nextNumber} at ${best.review.overall}/10 after ${best.review.iteration} of ${MAX_ITERATIONS} max passes`,
+      completed_at: new Date().toISOString(),
+    })
+    .eq('id', runId)
+  step(`pipeline complete — v${nextNumber} at ${best.review.overall}/10`)
 }

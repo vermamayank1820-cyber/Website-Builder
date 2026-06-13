@@ -99,7 +99,7 @@ Respond with ONLY a JSON object (no fences, no prose, no annotations on values):
       "name": string,                 // e.g. "Luxury Editorial", "Type-Led Minimalism", "Immersive Cinematic"
       "atmosphere": string,           // the emotional register of the page in one sentence
       "layout_strategy": string,      // composition approach: grids, asymmetry, bleeds, rhythm
-      "typography": string,           // display/body strategy using ONLY Tailwind stacks (font-sans/serif/mono), scale + weight character
+      "typography": string,           // display/body strategy using ONLY the loaded fonts — font-sans (Inter), font-serif (Fraunces), font-display (Space Grotesk), font-editorial (Instrument Serif), font-mono (JetBrains Mono); name the pairing + scale/weight character
       "palette": string[],            // 3-5 hex codes or named tones
       "imagery_strategy": string,     // how imagery/constructed visuals carry the page (verified photo library or CSS/SVG scenes only)
       "conversion_approach": string,  // how this concept converts: funnel, CTAs, proof
@@ -114,7 +114,7 @@ Respond with ONLY a JSON object (no fences, no prose, no annotations on values):
 
 Rules:
 - The four concepts must differ structurally — different layout strategy, different typographic character, different imagery strategy, different atmosphere. Four flavors of the same idea is a failed exploration.
-- Score on: fit to the brief and audience, distinctiveness, conversion logic, feasibility within the sandbox (Tailwind built-in font stacks only; motion limited to IntersectionObserver reveals + CSS transitions; imagery from the verified library or HTML/CSS/SVG construction).
+- Score on: fit to the brief and audience, distinctiveness, conversion logic, feasibility within the sandbox (five loaded fonts only — Inter/Fraunces/Space Grotesk/Instrument Serif/JetBrains Mono via font-sans/serif/display/editorial/mono; motion limited to IntersectionObserver reveals + CSS transitions; imagery from the verified library or HTML/CSS/SVG construction).
 - The critics' bar: would the design teams at Stripe, Linear, Apple approve the winning direction?
 - Never select a concept whose hero would be text on a flat background — every concept needs a designed ground.`
 

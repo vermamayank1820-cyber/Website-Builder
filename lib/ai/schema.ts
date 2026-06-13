@@ -1,14 +1,18 @@
 import { z } from 'zod'
 
+import { MAX_INPUT_CHARS, MIN_INPUT_CHARS } from '@/lib/input/constants'
+
+const userInput = z.string().trim().min(MIN_INPUT_CHARS).max(MAX_INPUT_CHARS)
+
 export const generateRequestSchema = z.object({
-  prompt: z.string().trim().min(3).max(2000),
+  prompt: userInput,
   /** When set, the project's business knowledge base grounds the generation. */
   projectId: z.string().uuid().optional(),
 })
 
 export const analyzeRequestSchema = z.object({
   projectId: z.string().uuid(),
-  goal: z.string().trim().min(3).max(2000),
+  goal: userInput,
   url: z.string().trim().url().optional(),
 })
 
@@ -18,7 +22,7 @@ export const agentRunRequestSchema = z.object({
 })
 
 export const editRequestSchema = z.object({
-  prompt: z.string().trim().min(3).max(2000),
+  prompt: userInput,
   currentCode: z.string().trim().min(1),
 })
 

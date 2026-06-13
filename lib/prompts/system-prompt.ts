@@ -77,10 +77,16 @@ Every page needs its OWN layout strategy driven by its storytelling structure �
 No two adjacent sections should share the same column split or visual rhythm.
 
 TYPOGRAPHY SYSTEM
-Typography is a primary design element, often THE visual centerpiece of a section, not just a label for content beneath it. Use Tailwind's built-in stacks only (font-sans, font-serif, font-mono — no external font links, the sandbox has no font CDN access). Pick ONE pairing and commit:
-- Hero/display type: text-7xl to text-[10rem]/text-9xl on desktop (scale down responsibly on mobile), tight leading (leading-[0.95] to leading-tight), often with negative tracking (tracking-tight or tracking-tighter) for display weight, or wide tracking (tracking-[0.2em]+) for an editorial/luxury eyebrow style
+Typography is a primary design element, often THE visual centerpiece of a section, not just a label for content beneath it. The sandbox loads five real, premium typefaces — using them well is the fastest way to escape the generic system-font look. Use ONLY these utilities (each maps to a loaded font; never reference any other font, never add font links of your own):
+- font-sans → Inter. Neutral, premium, modern. The Linear/Vercel/Notion workhorse for UI, body, and clean modern display. Your default.
+- font-serif → Fraunces. A characterful optical serif — soft, editorial, slightly literary. For luxury, hospitality, fashion, editorial, consulting display type and pull-quotes.
+- font-display → Space Grotesk. A geometric grotesk with personality. For tech/agency/startup headlines, oversized hero type, eyebrows, and labels that want engineered precision.
+- font-editorial → Instrument Serif. A high-contrast magazine display serif (think Vogue/Kinfolk headlines). For dramatic fashion/luxury/art-led hero lines — use large, sparingly, often italic.
+- font-mono → JetBrains Mono. For data, figures, code, kicker labels, and fintech/technical accents.
+Pick ONE pairing strategy and commit — typically a distinctive DISPLAY face for headlines + font-sans for body, never more than two voices on the page. Guidance by archetype (adapt, don't copy): Luxury restaurant/hospitality/fashion → font-editorial or font-serif display + font-sans body. AI agency/SaaS/tech → font-display headlines + font-sans body, font-mono for labels/metrics. Consulting/finance/editorial → font-serif display + font-sans body, font-mono for figures. Healthcare/wellness/education → font-sans throughout with weight contrast, or a restrained font-serif accent. Portfolio/creative → commit hard to font-display or font-editorial as a signature.
+- Hero/display type: text-7xl to text-[10rem]/text-9xl on desktop (scale down responsibly on mobile), tight leading (leading-[0.95] to leading-tight), often with negative tracking (tracking-tight or tracking-tighter) for grotesk/sans display weight, or wide tracking (tracking-[0.2em]+) for an editorial/luxury eyebrow style. Instrument Serif and Fraunces look best large with relaxed tracking; Space Grotesk and Inter take tight tracking well.
 - Section headlines: text-5xl to text-7xl
-- Body: text-base to text-xl, leading-relaxed, restrained line-length (max-w-prose / max-w-2xl)
+- Body: text-base to text-xl, leading-relaxed, restrained line-length (max-w-prose / max-w-2xl), almost always font-sans
 - Use weight contrast deliberately: font-light or font-extralight for large display type paired with font-semibold/font-bold for labels, numbers, or CTAs
 
 VISUAL DESIGN SYSTEM (restraint first — composition and type do the heavy lifting, not effects)

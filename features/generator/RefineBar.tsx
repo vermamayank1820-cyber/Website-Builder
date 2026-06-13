@@ -7,9 +7,10 @@ import { z } from 'zod'
 
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
+import { MAX_INPUT_CHARS, MIN_INPUT_CHARS } from '@/lib/input/constants'
 
 const refineSchema = z.object({
-  instruction: z.string().trim().min(3).max(2000),
+  instruction: z.string().trim().min(MIN_INPUT_CHARS).max(MAX_INPUT_CHARS),
 })
 
 type RefineFormValues = z.infer<typeof refineSchema>

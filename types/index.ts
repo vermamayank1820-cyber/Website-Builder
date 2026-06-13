@@ -144,6 +144,8 @@ export interface GenerateResponseData {
   code: string
   summary?: ProjectSummary
   changelog?: Omit<ChangeLog, 'version'>
+  /** IVIS — the vertical the input was classified as (for UI / telemetry). */
+  websiteType?: string
 }
 
 // ──────────────────────────────────────────────

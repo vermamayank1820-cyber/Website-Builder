@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { buildWebsiteContext } from '@/lib/agents/prompts'
 import { generateLandingPage } from '@/lib/ai/generate'
 import { generateRequestSchema } from '@/lib/ai/schema'
+import { routeAndPlan } from '@/lib/intent'
 import { ProviderError } from '@/lib/providers'
 import { getSupabaseServerClient } from '@/lib/supabase/server'
 import type { ApiResponse, BusinessKnowledge, GenerateResponseData } from '@/types'
@@ -67,13 +68,27 @@ export async function POST(
     }
   }
 
+  // IVIS: classify the vertical and build a specialist directive so the page
+  // is native to its industry (a lawyer feels like a lawyer, a café like a
+  // café) rather than a generic template. Deterministic — adds no latency.
+  const routed = routeAndPlan({
+    prompt: parsed.data.prompt,
+    context: businessContext,
+    brandName: undefined,
+  })
+  const combinedContext =
+    [businessContext, routed.generationContext].filter(Boolean).join('\n\n') || undefined
+
   try {
     const { code, summary } = await generateLandingPage(
       parsed.data.prompt,
-      businessContext,
-      industryHint ?? parsed.data.prompt
+      combinedContext,
+      industryHint ?? routed.plannerLabel
     )
-    return NextResponse.json({ success: true, data: { code, summary } })
+    return NextResponse.json({
+      success: true,
+      data: { code, summary, websiteType: routed.intent.websiteType },
+    })
   } catch (error: unknown) {
     const { message, status } = toErrorResponse(error)
     return NextResponse.json({ success: false, error: message }, { status })

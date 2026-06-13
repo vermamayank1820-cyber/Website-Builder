@@ -4,6 +4,44 @@ const BABEL_CDN = 'https://unpkg.com/@babel/standalone/babel.min.js'
 const TAILWIND_CDN = 'https://cdn.tailwindcss.com'
 
 /**
+ * Premium type system loaded into every preview/screenshot/thumbnail.
+ * Five families, five clear roles — characterful enough to escape the
+ * system-UI "AI template" look, disciplined enough to pair cleanly:
+ *   Inter           → font-sans      (neutral premium UI/body/modern display)
+ *   Fraunces        → font-serif     (luxury editorial serif, optical + soft)
+ *   Space Grotesk   → font-display   (geometric display: tech/agency/startup)
+ *   Instrument Serif→ font-editorial (high-contrast magazine display serif)
+ *   JetBrains Mono  → font-mono      (labels, data, code, fintech figures)
+ * The system prompt teaches the model these exact utilities; keep the two
+ * in sync. The sandbox is allow-scripts only, which does NOT block font
+ * resource loading (it already loads CDN scripts the same way).
+ */
+const GOOGLE_FONTS_HREF =
+  'https://fonts.googleapis.com/css2?' +
+  'family=Inter:wght@300;400;500;600;700;800;900&' +
+  'family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..600&' +
+  'family=Space+Grotesk:wght@400;500;600;700&' +
+  'family=Instrument+Serif:ital@0;1&' +
+  'family=JetBrains+Mono:wght@400;500;700&' +
+  'display=swap'
+
+/** Maps the font utilities to the loaded families (Tailwind Play CDN config). */
+const TAILWIND_FONT_CONFIG = `
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+              serif: ['Fraunces', 'ui-serif', 'Georgia', 'serif'],
+              display: ['"Space Grotesk"', 'Inter', 'ui-sans-serif', 'sans-serif'],
+              editorial: ['"Instrument Serif"', 'Fraunces', 'ui-serif', 'serif'],
+              mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+            },
+          },
+        },
+      };`
+
+/**
  * Escapes "</script" sequences so the generated component code can be
  * embedded inside an inline <script> tag without prematurely closing it.
  */
@@ -24,13 +62,17 @@ export function buildPreviewHtml(code: string): string {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="${GOOGLE_FONTS_HREF}" />
     <script src="${REACT_CDN}"></script>
     <script src="${REACT_DOM_CDN}"></script>
     <script src="${BABEL_CDN}"></script>
     <script src="${TAILWIND_CDN}"></script>
+    <script>${TAILWIND_FONT_CONFIG}</script>
     <style>
       html, body, #root { height: 100%; }
-      body { margin: 0; }
+      body { margin: 0; font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
       html { scroll-behavior: smooth; }
     </style>
   </head>

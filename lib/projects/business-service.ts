@@ -89,6 +89,28 @@ export async function runAgent(
   return postJson<ProjectDocument>('/api/agent/run', { projectId, kind })
 }
 
+/**
+ * Starts the website build as a background job; returns the agent_runs
+ * id to poll. The server persists the finished version itself.
+ */
+export async function startWebsiteBuild(
+  projectId: string,
+  prompt: string
+): Promise<{ runId: string }> {
+  return postJson<{ runId: string }>('/api/agent/website', { projectId, prompt })
+}
+
+export async function getAgentRunById(runId: string): Promise<AgentRun | null> {
+  const supabase = getSupabaseBrowserClient()
+  const { data, error } = await supabase
+    .from('agent_runs')
+    .select()
+    .eq('id', runId)
+    .maybeSingle()
+  assertNoError(error, 'Failed to load build status')
+  return (data as AgentRun) ?? null
+}
+
 export async function getBusinessProfile(
   projectId: string
 ): Promise<BusinessProfile | null> {

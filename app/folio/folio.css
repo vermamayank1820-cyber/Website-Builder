@@ -1,0 +1,474 @@
+/* ──────────────────────────────────────────────────────────────
+   Priya Raman — "Drafting table / pen-plotter" system.
+   Cool drafting neutral, cool ink, blueprint-blue generative line-work.
+   Scoped under .folio so it shares nothing with the app globals or the
+   Meridian route. Type is grotesk-led (no serif) to stay clear of the
+   warm-cream-serif default.
+   ────────────────────────────────────────────────────────────── */
+
+.folio {
+  --f-paper: #e6e6e0;
+  --f-paper-2: #deded7;
+  --f-paper-3: #d6d6ce;
+  --f-ink: #15171b;
+  --f-ink-2: #383b41;
+  --f-muted: #54575c; /* AA on paper */
+  --f-faint: #686b70; /* AA on paper */
+  --f-line: rgba(21, 23, 27, 0.14);
+  --f-line-2: rgba(21, 23, 27, 0.26);
+  --f-line-3: rgba(21, 23, 27, 0.42);
+
+  --f-blue: #1f44e0;
+  --f-blue-soft: rgba(31, 68, 224, 0.1);
+  --f-blue-line: rgba(31, 68, 224, 0.4);
+  --f-red: #d8412a; /* functional registration marker only */
+
+  --f-display: var(--font-bricolage), "Arial Narrow", sans-serif;
+  --f-sans: var(--font-geist-sans), system-ui, sans-serif;
+  --f-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --f-eyebrow: 0.7rem;
+  --f-body: clamp(1rem, 0.95rem + 0.22vw, 1.1rem);
+  --f-lead: clamp(1.25rem, 1.05rem + 0.9vw, 1.7rem);
+  --f-h3: clamp(1.5rem, 1.2rem + 1.4vw, 2.3rem);
+  --f-h2: clamp(2.2rem, 1.4rem + 3.4vw, 4.4rem);
+  --f-hero: clamp(3rem, 1rem + 9vw, 9.5rem);
+
+  --f-section: clamp(5.5rem, 3rem + 9vw, 12rem);
+  --f-gutter: clamp(1.25rem, 0.4rem + 3vw, 3.25rem);
+  --f-maxw: 1240px;
+
+  --f-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --f-ease-spring: cubic-bezier(0.34, 1.4, 0.5, 1);
+  --f-dur: 800ms;
+
+  background: var(--f-paper);
+  color: var(--f-ink);
+  font-family: var(--f-sans);
+  font-size: var(--f-body);
+  line-height: 1.55;
+  letter-spacing: -0.006em;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  min-height: 100vh;
+  position: relative;
+  overflow-x: clip;
+}
+
+/* Faint drafting grid + grain over the whole surface */
+.folio::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, rgba(21, 23, 27, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(21, 23, 27, 0.04) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: radial-gradient(120% 90% at 50% 0%, #000 35%, transparent 90%);
+  -webkit-mask-image: radial-gradient(120% 90% at 50% 0%, #000 35%, transparent 90%);
+  opacity: 0.6;
+}
+
+.folio > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Layout primitives ─────────────────────────────────────── */
+
+.f-container {
+  width: 100%;
+  max-width: var(--f-maxw);
+  margin-inline: auto;
+  padding-inline: var(--f-gutter);
+}
+
+.f-scene {
+  padding-block: var(--f-section);
+}
+
+.folio [id] {
+  scroll-margin-top: 92px;
+}
+
+/* ── Typographic atoms ─────────────────────────────────────── */
+
+.f-eyebrow {
+  font-family: var(--f-mono);
+  font-size: var(--f-eyebrow);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--f-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.f-eyebrow::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--f-line-3);
+  transform: rotate(45deg);
+}
+
+.f-coord {
+  font-family: var(--f-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  color: var(--f-faint);
+}
+
+.f-display {
+  font-family: var(--f-display);
+  font-weight: 600;
+  font-size: var(--f-hero);
+  line-height: 0.92;
+  letter-spacing: -0.035em;
+}
+
+.f-h2 {
+  font-family: var(--f-display);
+  font-weight: 580;
+  font-size: var(--f-h2);
+  line-height: 0.98;
+  letter-spacing: -0.03em;
+}
+
+.f-h3 {
+  font-family: var(--f-display);
+  font-weight: 560;
+  font-size: var(--f-h3);
+  line-height: 1.06;
+  letter-spacing: -0.02em;
+}
+
+.f-lead {
+  font-size: var(--f-lead);
+  line-height: 1.42;
+  color: var(--f-ink-2);
+  letter-spacing: -0.012em;
+  font-weight: 380;
+}
+
+.f-blue {
+  color: var(--f-blue);
+}
+
+/* ── Buttons / links ───────────────────────────────────────── */
+
+.f-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  height: 3.25rem;
+  padding-inline: 1.5rem;
+  font-family: var(--f-mono);
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  cursor: pointer;
+  border: 1px solid transparent;
+  text-decoration: none;
+  transition:
+    transform 0.45s var(--f-ease-spring),
+    background-color 0.3s var(--f-ease),
+    color 0.3s var(--f-ease),
+    border-color 0.3s var(--f-ease);
+}
+
+.f-btn-primary {
+  background: var(--f-ink);
+  color: var(--f-paper);
+}
+.f-btn-primary:hover {
+  background: var(--f-blue);
+}
+
+.f-btn-ghost {
+  background: transparent;
+  color: var(--f-ink);
+  border-color: var(--f-line-2);
+}
+.f-btn-ghost:hover {
+  border-color: var(--f-ink);
+}
+
+.f-btn-arrow {
+  transition: transform 0.4s var(--f-ease-spring);
+}
+.f-btn:hover .f-btn-arrow {
+  transform: translateX(4px);
+}
+
+.f-link {
+  color: var(--f-ink);
+  text-decoration: none;
+  background-image: linear-gradient(var(--f-blue), var(--f-blue));
+  background-size: 0% 1.5px;
+  background-repeat: no-repeat;
+  background-position: left 100%;
+  transition: background-size 0.4s var(--f-ease), color 0.3s var(--f-ease);
+  padding-bottom: 2px;
+}
+.f-link:hover {
+  background-size: 100% 1.5px;
+  color: var(--f-blue);
+}
+
+/* ── Reveal (scripting-gated → no-JS shows everything) ─────── */
+
+@media (scripting: enabled) {
+  .f-reveal {
+    opacity: 0;
+    transform: translateY(22px);
+    transition:
+      opacity var(--f-dur) var(--f-ease),
+      transform var(--f-dur) var(--f-ease);
+    transition-delay: var(--f-delay, 0ms);
+  }
+  .f-reveal.is-in {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ── Focus ─────────────────────────────────────────────────── */
+
+.folio :focus-visible {
+  outline: 2px solid var(--f-blue);
+  outline-offset: 3px;
+}
+
+/* ── Registration corner marks (structural device) ────────── */
+
+.f-frame {
+  position: relative;
+}
+.f-mark {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  pointer-events: none;
+  color: var(--f-line-3);
+}
+.f-mark::before,
+.f-mark::after {
+  content: "";
+  position: absolute;
+  background: currentColor;
+}
+.f-mark::before {
+  width: 100%;
+  height: 1px;
+  top: 50%;
+}
+.f-mark::after {
+  height: 100%;
+  width: 1px;
+  left: 50%;
+}
+.f-mark.tl { top: -6px; left: -6px; }
+.f-mark.tr { top: -6px; right: -6px; }
+.f-mark.bl { bottom: -6px; left: -6px; }
+.f-mark.br { bottom: -6px; right: -6px; }
+
+/* ── Scene 1: generative hero ──────────────────────────────── */
+
+.f-hero {
+  position: relative;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow: hidden;
+}
+
+.f-hero-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+/* paper scrim so headline stays legible over the line-work */
+.f-hero-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, var(--f-paper) 10%, rgba(230, 230, 224, 0.66) 42%, transparent 80%),
+    linear-gradient(0deg, var(--f-paper) 2%, transparent 32%);
+}
+
+.f-hero-inner {
+  position: relative;
+  z-index: 2;
+  padding-bottom: clamp(3rem, 2rem + 5vw, 6rem);
+  padding-top: 7rem;
+}
+
+/* On narrow screens the field stacks behind the body text — lay down more
+   paper from the bottom so the lead and meta stay legible. */
+@media (max-width: 720px) {
+  .f-hero-scrim {
+    background:
+      linear-gradient(0deg, var(--f-paper) 30%, rgba(230, 230, 224, 0.5) 58%, transparent 86%),
+      linear-gradient(90deg, var(--f-paper) 4%, transparent 60%);
+  }
+}
+
+.f-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 2rem;
+  margin-top: 2.25rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--f-line-2);
+  max-width: 52rem;
+}
+
+/* ── Work grid ─────────────────────────────────────────────── */
+
+.f-work-item {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+  padding-block: clamp(2.5rem, 2rem + 3vw, 4.5rem);
+  border-top: 1px solid var(--f-line);
+}
+@media (min-width: 860px) {
+  .f-work-item {
+    grid-template-columns: 0.85fr 1.15fr;
+    gap: clamp(2rem, 1rem + 4vw, 5rem);
+    align-items: center;
+  }
+}
+
+.f-work-visual {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  background: var(--f-paper-2);
+  border: 1px solid var(--f-line-2);
+  overflow: hidden;
+}
+
+.f-tag {
+  font-family: var(--f-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  color: var(--f-muted);
+  border: 1px solid var(--f-line-2);
+  padding: 0.2rem 0.55rem;
+  border-radius: 2px;
+}
+
+/* ── Approach / capabilities ───────────────────────────────── */
+
+.f-approach-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+  border-top: 1px solid var(--f-line);
+}
+@media (min-width: 760px) {
+  .f-approach-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+.f-approach-cell {
+  padding: clamp(1.75rem, 1rem + 2vw, 2.75rem) 0;
+  border-bottom: 1px solid var(--f-line);
+}
+@media (min-width: 760px) {
+  .f-approach-cell {
+    padding-inline: clamp(1rem, 0.5rem + 1.5vw, 2rem);
+    border-bottom: 0;
+    border-left: 1px solid var(--f-line);
+  }
+  .f-approach-cell:first-child {
+    border-left: 0;
+    padding-left: 0;
+  }
+}
+
+/* ── Writing list ──────────────────────────────────────────── */
+
+.f-write-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 1.25rem;
+  align-items: baseline;
+  padding-block: 1.4rem;
+  border-top: 1px solid var(--f-line);
+  transition: padding-left 0.4s var(--f-ease);
+}
+.f-write-row:hover {
+  padding-left: 0.75rem;
+}
+.f-write-row:last-child {
+  border-bottom: 1px solid var(--f-line);
+}
+
+/* ── Contact ───────────────────────────────────────────────── */
+
+.f-contact {
+  background: var(--f-ink);
+  color: var(--f-paper);
+  position: relative;
+  overflow: hidden;
+}
+.f-contact .f-eyebrow {
+  color: rgba(230, 230, 224, 0.55);
+}
+.f-contact-mail {
+  font-family: var(--f-display);
+  font-weight: 560;
+  font-size: clamp(1.8rem, 1rem + 4.5vw, 4.5rem);
+  letter-spacing: -0.03em;
+  color: var(--f-paper);
+  text-decoration: none;
+  display: inline-block;
+  line-height: 1.05;
+}
+.f-contact-mail:hover {
+  color: #9db0ff;
+}
+
+/* ── Career line ───────────────────────────────────────────── */
+
+.f-role-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+@media (min-width: 760px) {
+  .f-role-grid {
+    grid-template-columns: 140px 1fr 1fr;
+    gap: 2.5rem;
+    align-items: start;
+  }
+}
+
+/* ── Responsive nav ────────────────────────────────────────── */
+
+@media (max-width: 720px) {
+  .f-nav-links {
+    display: none !important;
+  }
+}
+
+/* ── Reduced motion ────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .folio * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .f-reveal {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
