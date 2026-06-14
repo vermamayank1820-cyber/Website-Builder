@@ -36,7 +36,7 @@ interface PromptComposerProps {
 
 const HINT_TIMEOUT_MS = 2600
 /** Surfaces shown directly in the selector row; the rest live under "More". */
-const PRIMARY_SURFACE_IDS = ['website', 'slides', 'image', 'design', 'research']
+const PRIMARY_SURFACE_IDS = ['website']
 
 /**
  * The dominant hero element: a large glass prompt box with attach, model,
@@ -54,9 +54,9 @@ export function PromptComposer({
   const [hint, setHint] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  // Surface OS: the active surface morphs the composer (placeholder), reveals
-  // sub-surfaces (progressive disclosure) and contextual suggestions.
-  const [surfaceId, setSurfaceId] = useState<string | null>(null)
+  // Website is the only surface — pre-select it so the user goes straight to
+  // choosing a vertical (SaaS / Cafe / Real Estate).
+  const [surfaceId, setSurfaceId] = useState<string | null>('website')
   const [subId, setSubId] = useState<string | null>(null)
   const [moreOpen, setMoreOpen] = useState(false)
   /** True while the composer holds an auto-expanded spec the user hasn't edited. */
